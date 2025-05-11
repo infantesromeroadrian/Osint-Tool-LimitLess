@@ -6,6 +6,9 @@ from models.document_model import DocumentModel
 from utils.document_processor import DocumentProcessor
 from utils.embedding_generator import EmbeddingGenerator
 from utils.vector_store import VectorStore
+from utils.case_path_resolver import CasePathResolver
+from pathlib import Path
+import shutil
 
 class DocumentService(BaseService):
     """Service for document processing and vectorization."""
@@ -15,7 +18,8 @@ class DocumentService(BaseService):
         self.document_model = DocumentModel()
         self.document_processor = DocumentProcessor()
         self.embedding_generator = EmbeddingGenerator()
-        self.vector_store = VectorStore()
+        self.vector_store = VectorStore()  # Now uses case-specific dir
+        self.case_resolver = CasePathResolver()
     
     def process_document(
         self, 
@@ -44,104 +48,139 @@ class DocumentService(BaseService):
             print(f"DEBUG: Saved temporary file to {temp_path}")
         
         try:
-            # Extract text from document
-            print(f"DEBUG: Attempting to extract text from {file.name}")
-            text = self.document_processor.extract_text(temp_path)
-            print(f"DEBUG: Extracted {len(text)} characters of text")
-            if len(text) < 100:
-                print(f"DEBUG: Text sample: '{text[:100]}'")
-            else:
-                print(f"DEBUG: Text sample: '{text[:100]}...'")
+            # Save a copy of the file to the case documents directory
+            documents_dir = self.case_resolver.get_case_directory("documents")
+            file_path = os.path.join(documents_dir, file.name)
             
-            if not text.strip():
-                print("DEBUG: WARNING - Extracted text is empty or whitespace only!")
+            try:
+                # Extract text from document first (before attempting to copy the file)
+                print(f"DEBUG: Attempting to extract text from {file.name}")
+                text = self.document_processor.extract_text(temp_path)
+                print(f"DEBUG: Extracted {len(text)} characters of text")
+                
+                # Copy the temporary file to the documents directory with error handling
+                # First try with shutil.copy, if it fails due to permissions, proceed without copying
+                try:
+                    print(f"DEBUG: Trying to save document to case directory: {file_path}")
+                    shutil.copy2(temp_path, file_path)
+                    print(f"DEBUG: Successfully saved document to case directory")
+                except PermissionError as perm_err:
+                    print(f"DEBUG: Permission error when saving file: {str(perm_err)}. Continuing without saving file.")
+                    # Continue processing even if we can't save the file
+                
+                if len(text) < 100:
+                    print(f"DEBUG: Text sample: '{text[:100]}'")
+                else:
+                    print(f"DEBUG: Text sample: '{text[:100]}...'")
+                
+                if not text.strip():
+                    print("DEBUG: WARNING - Extracted text is empty or whitespace only!")
+                    return {
+                        "error": "No text could be extracted from the document",
+                        "success": False
+                    }
+                
+                # Preprocess text
+                print(f"DEBUG: Preprocessing text with options: {preprocessing_options or ['Remove stopwords']}")
+                preprocessed_text = self.document_processor.preprocess_text(
+                    text, 
+                    options=preprocessing_options or ["Remove stopwords"]
+                )
+                print(f"DEBUG: After preprocessing, text length is {len(preprocessed_text)} characters")
+                
+                # Split text into chunks
+                print(f"DEBUG: Splitting text into chunks (size={chunk_size}, overlap={chunk_overlap})")
+                chunks = self.document_processor.split_text(
+                    preprocessed_text,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap
+                )
+                print(f"DEBUG: Created {len(chunks)} chunks")
+                
+                if len(chunks) == 0:
+                    print("DEBUG: WARNING - No chunks were created from the text!")
+                    return {
+                        "error": "Document was processed but no chunks were created",
+                        "success": False
+                    }
+                    
+                # Print first chunk as sample
+                if chunks:
+                    print(f"DEBUG: First chunk sample: '{chunks[0][:100]}...'")
+                
+                # Generate embeddings
+                print(f"DEBUG: Generating embeddings with model {embedding_model}")
+                embeddings = self.embedding_generator.generate_embeddings(
+                    chunks,
+                    model_name=embedding_model
+                )
+                print(f"DEBUG: Generated {len(embeddings)} embeddings")
+                
+                # Get case info for metadata
+                active_case_info = self.case_resolver.get_active_case_info()
+                case_name = active_case_info["name"] if active_case_info else "default"
+                case_id = active_case_info["id"] if active_case_info else None
+                
+                # Store in vector database
+                print(f"DEBUG: Storing document in vector database")
+                document_id = self.vector_store.add_document(
+                    document_name=file.name,
+                    chunks=chunks,
+                    embeddings=embeddings,
+                    metadata={
+                        "filename": file.name,
+                        "file_type": file.name.split(".")[-1].lower(),
+                        "chunk_size": chunk_size,
+                        "chunk_overlap": chunk_overlap,
+                        "embedding_model": embedding_model,
+                        "preprocessing": preprocessing_options or ["Remove stopwords"],
+                        "case_name": case_name,
+                        "case_id": case_id
+                    }
+                )
+                print(f"DEBUG: Document stored with ID {document_id}")
+                
+                # Save document metadata
+                print(f"DEBUG: Saving document metadata")
+                self.document_model.add_document(
+                    document_id=document_id,
+                    name=file.name,
+                    file_type=file.name.split(".")[-1].lower(),
+                    chunk_count=len(chunks),
+                    processing_options={
+                        "chunk_size": chunk_size,
+                        "chunk_overlap": chunk_overlap,
+                        "embedding_model": embedding_model,
+                        "preprocessing": preprocessing_options or ["Remove stopwords"],
+                        "case_name": case_name,
+                        "case_id": case_id
+                    }
+                )
+                print(f"DEBUG: Document metadata saved")
+                
+                # Check document stats after adding
+                stats = self.vector_store.get_collection_stats()
+                print(f"DEBUG: Vector store stats after adding document: {stats}")
+                
                 return {
-                    "error": "No text could be extracted from the document",
-                    "success": False
-                }
-            
-            # Preprocess text
-            print(f"DEBUG: Preprocessing text with options: {preprocessing_options or ['Remove stopwords']}")
-            preprocessed_text = self.document_processor.preprocess_text(
-                text, 
-                options=preprocessing_options or ["Remove stopwords"]
-            )
-            print(f"DEBUG: After preprocessing, text length is {len(preprocessed_text)} characters")
-            
-            # Split text into chunks
-            print(f"DEBUG: Splitting text into chunks (size={chunk_size}, overlap={chunk_overlap})")
-            chunks = self.document_processor.split_text(
-                preprocessed_text,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
-            )
-            print(f"DEBUG: Created {len(chunks)} chunks")
-            
-            if len(chunks) == 0:
-                print("DEBUG: WARNING - No chunks were created from the text!")
-                return {
-                    "error": "Document was processed but no chunks were created",
-                    "success": False
+                    "document_id": document_id,
+                    "name": file.name,
+                    "chunk_count": len(chunks),
+                    "success": True
                 }
                 
-            # Print first chunk as sample
-            if chunks:
-                print(f"DEBUG: First chunk sample: '{chunks[0][:100]}...'")
-            
-            # Generate embeddings
-            print(f"DEBUG: Generating embeddings with model {embedding_model}")
-            embeddings = self.embedding_generator.generate_embeddings(
-                chunks,
-                model_name=embedding_model
-            )
-            print(f"DEBUG: Generated {len(embeddings)} embeddings")
-            
-            # Store in vector database
-            print(f"DEBUG: Storing document in vector database")
-            document_id = self.vector_store.add_document(
-                document_name=file.name,
-                chunks=chunks,
-                embeddings=embeddings,
-                metadata={
-                    "filename": file.name,
-                    "file_type": file.name.split(".")[-1].lower(),
-                    "chunk_size": chunk_size,
-                    "chunk_overlap": chunk_overlap,
-                    "embedding_model": embedding_model,
-                    "preprocessing": preprocessing_options or ["Remove stopwords"]
+            except Exception as e:
+                # Handle errors in text extraction or other document processing
+                import traceback
+                print(f"DEBUG: ERROR processing document content: {str(e)}")
+                print(f"DEBUG: Error traceback: {traceback.format_exc()}")
+                return {
+                    "error": str(e),
+                    "success": False
                 }
-            )
-            print(f"DEBUG: Document stored with ID {document_id}")
-            
-            # Save document metadata
-            print(f"DEBUG: Saving document metadata")
-            self.document_model.add_document(
-                document_id=document_id,
-                name=file.name,
-                file_type=file.name.split(".")[-1].lower(),
-                chunk_count=len(chunks),
-                processing_options={
-                    "chunk_size": chunk_size,
-                    "chunk_overlap": chunk_overlap,
-                    "embedding_model": embedding_model,
-                    "preprocessing": preprocessing_options or ["Remove stopwords"]
-                }
-            )
-            print(f"DEBUG: Document metadata saved")
-            
-            # Check document stats after adding
-            stats = self.vector_store.get_collection_stats()
-            print(f"DEBUG: Vector store stats after adding document: {stats}")
-            
-            return {
-                "document_id": document_id,
-                "name": file.name,
-                "chunk_count": len(chunks),
-                "success": True
-            }
             
         except Exception as e:
-            # More detailed error logging
+            # More detailed error logging for other exceptions
             import traceback
             print(f"DEBUG: ERROR processing document {file.name}: {str(e)}")
             print(f"DEBUG: Error traceback: {traceback.format_exc()}")
@@ -184,11 +223,16 @@ class DocumentService(BaseService):
                 else:
                     file_types[file_type] = 1
             
+            # Get active case info
+            active_case_info = self.case_resolver.get_active_case_info()
+            case_name = active_case_info["name"] if active_case_info else "default"
+            
             return {
                 "total_documents": total_documents,
                 "total_chunks": total_chunks,
                 "file_types": file_types,
-                "vector_collection": vector_stats.get("collection_name", "documents")
+                "vector_collection": vector_stats.get("collection_name", "documents"),
+                "active_case": case_name
             }
             
         except Exception as e:

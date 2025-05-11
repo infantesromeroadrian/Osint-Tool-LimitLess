@@ -4,6 +4,7 @@ import base64
 import openai
 import logging
 from pathlib import Path
+from utils.case_path_resolver import CasePathResolver
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ImageAnalysisService")
@@ -14,10 +15,10 @@ class ImageAnalysisService:
     def __init__(self):
         """Initialize the image analysis service with OpenAI API settings."""
         self.api_key = os.environ.get("OPENAI_API_KEY")
-        self.output_dir = Path(os.path.abspath("data/image_analysis"))
+        self.case_resolver = CasePathResolver()
         
-        # Ensure the output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
+        # Get output directory based on active case
+        self.output_dir = self.case_resolver.get_case_directory("image_analysis")
         
         # Initialize OpenAI client
         openai.api_key = self.api_key
@@ -92,6 +93,9 @@ class ImageAnalysisService:
                 analysis_text = response["choices"][0]["message"]["content"]
                 logger.info(f"Image analysis completed in {elapsed_time:.2f} seconds")
                 
+                # Make sure we're using the latest case directory
+                self.output_dir = self.case_resolver.get_case_directory("image_analysis")
+                
                 # Save analysis to file
                 timestamp = int(time.time())
                 output_filename = f"{Path(image_file.name).stem}_analysis_{timestamp}.txt"
@@ -116,6 +120,9 @@ class ImageAnalysisService:
         Returns:
             list: List of analysis file paths
         """
+        # Make sure we're using the latest case directory
+        self.output_dir = self.case_resolver.get_case_directory("image_analysis")
+        
         analysis_files = list(self.output_dir.glob("*_analysis_*.txt"))
         return sorted([str(f) for f in analysis_files], reverse=True)
     
@@ -129,6 +136,9 @@ class ImageAnalysisService:
         Returns:
             str: The analysis text or error message
         """
+        # Make sure we're using the latest case directory
+        self.output_dir = self.case_resolver.get_case_directory("image_analysis")
+        
         file_path = self.output_dir / filename
         
         try:

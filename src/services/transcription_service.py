@@ -4,6 +4,7 @@ import openai
 import tempfile
 from pathlib import Path
 import logging
+from utils.case_path_resolver import CasePathResolver
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("TranscriptionService")
@@ -14,10 +15,10 @@ class TranscriptionService:
     def __init__(self):
         """Initialize the transcription service with OpenAI API settings."""
         self.api_key = os.environ.get("OPENAI_API_KEY")
-        self.output_dir = Path(os.path.abspath("data/transcrip"))
+        self.case_resolver = CasePathResolver()
         
-        # Ensure the output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
+        # Get output directory based on active case
+        self.output_dir = self.case_resolver.get_case_directory("transcriptions")
         
         # Initialize OpenAI client
         openai.api_key = self.api_key
@@ -65,6 +66,9 @@ class TranscriptionService:
             if response and hasattr(response, "text"):
                 transcription_text = response.text
                 logger.info(f"Transcription completed in {elapsed_time:.2f} seconds")
+                
+                # Make sure we're using the latest case directory
+                self.output_dir = self.case_resolver.get_case_directory("transcriptions")
                 
                 # Save transcription to file
                 output_filename = f"{Path(audio_file.name).stem}_transcription.txt"
@@ -117,6 +121,9 @@ class TranscriptionService:
                 translated_text = response["choices"][0]["message"]["content"].strip()
                 logger.info(f"Translation completed in {elapsed_time:.2f} seconds")
                 
+                # Make sure we're using the latest case directory
+                self.output_dir = self.case_resolver.get_case_directory("transcriptions")
+                
                 # Save translation to file
                 timestamp = int(time.time())
                 output_filename = f"translation_{target_language}_{timestamp}.txt"
@@ -141,6 +148,9 @@ class TranscriptionService:
         Returns:
             list: List of transcription file paths
         """
+        # Make sure we're using the latest case directory
+        self.output_dir = self.case_resolver.get_case_directory("transcriptions")
+        
         transcription_files = list(self.output_dir.glob("*_transcription.txt"))
         return [str(f) for f in transcription_files]
     
@@ -154,6 +164,9 @@ class TranscriptionService:
         Returns:
             str: The transcription text or error message
         """
+        # Make sure we're using the latest case directory
+        self.output_dir = self.case_resolver.get_case_directory("transcriptions")
+        
         file_path = self.output_dir / filename
         
         try:

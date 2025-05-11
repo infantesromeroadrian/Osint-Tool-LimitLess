@@ -4,16 +4,22 @@ from typing import List, Dict, Any, Union
 import chromadb
 from chromadb.config import Settings
 from utils.helpers import generate_unique_id, ensure_directory_exists
+from utils.case_path_resolver import CasePathResolver
 
 class VectorStore:
     """Vector database for storing and retrieving document embeddings."""
     
-    def __init__(self, persist_directory: str = "./data/chroma_db"):
+    def __init__(self, persist_directory: str = None):
         """Initialize the vector store.
         
         Args:
-            persist_directory: Directory to persist the database
+            persist_directory: Directory to persist the database (will use case directory if None)
         """
+        # Get path based on active case if not specified
+        if persist_directory is None:
+            case_resolver = CasePathResolver()
+            persist_directory = str(case_resolver.get_case_directory("chroma_db"))
+        
         # Ensure the persistence directory exists
         ensure_directory_exists(persist_directory)
         print(f"DEBUG: Vector store using persistence directory: {persist_directory}")
@@ -209,20 +215,21 @@ class VectorStore:
         Returns:
             Dictionary with collection statistics
         """
-        try:
-            count = self.collection.count()
-            print(f"DEBUG: Collection 'documents' has {count} total chunks")
-            
-            return {
-                "total_chunks": count,
-                "collection_name": self.collection.name
-            }
-        except Exception as e:
-            print(f"DEBUG: ERROR getting collection stats: {str(e)}")
-            import traceback
-            print(f"DEBUG: Error traceback: {traceback.format_exc()}")
-            return {
-                "total_chunks": 0,
-                "collection_name": "documents",
-                "error": str(e)
-            } 
+        # Get the number of documents in the collection
+        count = self.collection.count()
+        
+        # Get the collection name
+        collection_name = self.collection.name
+        
+        # Get a list of unique document IDs
+        all_metadatas = self.collection.get()["metadatas"]
+        document_ids = set()
+        for metadata in all_metadatas:
+            if "document_id" in metadata:
+                document_ids.add(metadata["document_id"])
+        
+        return {
+            "collection_name": collection_name,
+            "total_chunks": count,
+            "unique_documents": len(document_ids)
+        } 

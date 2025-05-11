@@ -42,7 +42,7 @@ RUN mkdir -p /root/.cache/torch/sentence_transformers/
 RUN python download_model.py || echo "Model download failed, will use fallback mode"
 
 # Make data directories
-RUN mkdir -p data/chroma_db data/documents
+RUN mkdir -p data/chroma_db data/documents data/casos data/image_analysis data/transcriptions
 
 # Create directory for NLTK data
 RUN mkdir -p /app/nltk_data && chmod 777 /app/nltk_data
@@ -59,12 +59,27 @@ COPY . .
 
 # Create a non-root user with proper home directory
 RUN addgroup --system app && \
-    adduser --system --ingroup app --home /app --no-create-home app && \
-    chown -R app:app /app
+    adduser --system --ingroup app --home /app --no-create-home app
+
+# Fix permissions for data directories - ensure full write access for mounted volumes
+RUN mkdir -p /app/data/casos /app/data/documents /app/data/chroma_db /app/data/transcriptions /app/data/image_analysis && \
+    chmod -R 777 /app/data && \
+    find /app/data -type d -exec chmod 777 {} \; && \
+    chown -R app:app /app && \
+    # Make the app directory world-writable for volume mounts
+    chmod -R 777 /app/data
+
 # Ensure model cache is accessible to app user
 RUN mkdir -p /home/app/.cache && \
     cp -r /root/.cache/torch /home/app/.cache/ || true && \
     chown -R app:app /home/app/.cache
+
+# Create script to fix permissions on startup
+RUN echo '#!/bin/sh' > /app/fix-permissions.sh && \
+    echo '# Fix permissions for mounted volumes on container startup' >> /app/fix-permissions.sh && \
+    echo 'find /app/data -type d -exec chmod 777 {} \;' >> /app/fix-permissions.sh && \
+    echo 'find /app/data -type f -exec chmod 666 {} \;' >> /app/fix-permissions.sh && \
+    chmod +x /app/fix-permissions.sh
 
 # Switch to non-root user
 USER app
@@ -78,5 +93,5 @@ ENV SENTENCE_TRANSFORMERS_HOME=/home/app/.cache/torch/sentence_transformers
 # Expose Streamlit port
 EXPOSE 8501
 
-# Command to run the application
-CMD ["streamlit", "run", "src/main.py", "--server.address=0.0.0.0"] 
+# Command to run the application, fixing permissions first
+CMD ["sh", "-c", "/app/fix-permissions.sh && streamlit run src/main.py --server.address=0.0.0.0"] 

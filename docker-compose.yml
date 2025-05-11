@@ -34,6 +34,8 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.Name}}"
+    # Asegurar que el usuario del contenedor tenga privilegios para modificar archivos
+    user: "0:0"  # Usar root:root para operaciones de archivo
 
 networks:
   osint-network:
