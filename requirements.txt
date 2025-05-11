@@ -16,6 +16,12 @@ python-dotenv==1.0.0
 chromadb==0.4.17
 # sentence-transformers ya instalado anteriormente
 
+# LangGraph components
+langchain>=0.2.0
+langgraph==0.1.15
+langchain-openai>=0.0.10
+typing-extensions>=4.8.0
+
 # Document processing
 PyPDF2==3.0.1
 python-docx==0.8.11

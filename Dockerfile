@@ -24,17 +24,19 @@ COPY requirements.txt .
 # Install basic dependencies first
 RUN pip install --no-cache-dir numpy pandas
 
-# Install PyTorch with specific version (smaller) and retry mechanism
-RUN pip install --no-cache-dir torch==1.13.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch with specific version (smaller) and enhanced retry mechanism
+RUN pip install --no-cache-dir --timeout=300 --retries=10 torch==1.13.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu || \
+    pip install --no-cache-dir --timeout=300 --retries=10 torch==1.13.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu || \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install OpenAI dependency (using older version that doesn't have proxy issues)
 RUN pip install --no-cache-dir openai==0.28.1
 
-# Install huggingface and transformers dependencies
-RUN pip install --no-cache-dir huggingface-hub==0.16.4 transformers==4.30.2 sentence-transformers==2.2.2
+# Install huggingface and transformers dependencies with retry mechanism
+RUN pip install --no-cache-dir --timeout=300 --retries=10 huggingface-hub==0.16.4 transformers==4.30.2 sentence-transformers==2.2.2
 
-# Install remaining requirements
-RUN pip install --no-cache-dir -r requirements.txt
+# Install remaining requirements with retry mechanism
+RUN pip install --no-cache-dir --timeout=300 --retries=10 -r requirements.txt
 
 # Copy the model download script and run it (will be replaced when we copy the full app)
 COPY download_model.py .

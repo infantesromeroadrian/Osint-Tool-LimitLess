@@ -2,6 +2,7 @@ import os
 import sys
 from typing import Dict, List, Any, Optional
 import openai
+from openai import OpenAI
 
 class LLMInterface:
     """Interface for interacting with language models."""
@@ -13,16 +14,13 @@ class LLMInterface:
             api_key: OpenAI API key (defaults to environment variable)
         """
         # Get the API key
-        if api_key:
-            openai.api_key = api_key
-        else:
-            openai.api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        
+        # Create client instance for OpenAI v1.x
+        self.client = OpenAI(api_key=api_key)
         
         # Print debug information
         print(f"OpenAI version: {openai.__version__}")
-        
-        # We're using the older OpenAI SDK (0.28.1) 
-        # No need to create a client instance
     
     def generate_answer(
         self, 
@@ -47,13 +45,13 @@ class LLMInterface:
         prompt = self._create_prompt(query, context)
         
         try:
-            # Create API call using older style
+            # Create API call using new style
             messages = [
                 {"role": "system", "content": self._get_system_prompt()},
                 {"role": "user", "content": prompt}
             ]
             
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -105,7 +103,7 @@ class LLMInterface:
         messages.append({"role": "user", "content": query})
         
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -151,7 +149,7 @@ class LLMInterface:
         messages.append({"role": "user", "content": query})
         
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -248,8 +246,4 @@ Guidelines:
 2. Be honest about limitations of your knowledge when appropriate
 3. Present information clearly and in a conversational but professional tone
 4. Emphasize cybersecurity best practices and ethical considerations
-5. Avoid providing instructions for illegal activities or harmful actions
-6. When discussing OSINT techniques, focus on legitimate and ethical applications
-
-Note that you are currently operating without access to any uploaded intelligence documents. Your responses are based solely on your general knowledge rather than specific document analysis.
 """ 

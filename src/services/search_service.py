@@ -5,6 +5,8 @@ from services.services import BaseService
 from utils.vector_store import VectorStore
 from utils.embedding_generator import EmbeddingGenerator
 from utils.llm_interface import LLMInterface
+from src.agents.rag_agent import RAGAgent
+from src.agents.multi_agent import MultiAgent
 
 class SearchService(BaseService):
     """Service for searching and retrieving intelligence with RAG."""
@@ -14,6 +16,10 @@ class SearchService(BaseService):
         self.vector_store = VectorStore()
         self.embedding_generator = EmbeddingGenerator()
         self.llm = LLMInterface(api_key=os.environ.get("OPENAI_API_KEY"))
+        
+        # Initialize agents
+        self.rag_agent = RAGAgent()
+        self.multi_agent = MultiAgent()
     
     def search(
         self, 
@@ -21,7 +27,9 @@ class SearchService(BaseService):
         temperature: float = 0.7,
         max_tokens: int = 500,
         top_k: int = 5,
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        use_agent: bool = True,  # Flag to use the advanced RAG agent
+        use_news: bool = True    # Flag to use the news agent together with RAG
     ) -> Dict[str, Any]:
         """Search intelligence database using RAG.
         
@@ -31,6 +39,8 @@ class SearchService(BaseService):
             max_tokens: Maximum tokens in response
             top_k: Number of relevant sources to retrieve
             chat_history: Optional list of previous chat messages
+            use_agent: Whether to use the advanced RAG agent
+            use_news: Whether to use news data alongside documents
             
         Returns:
             Dictionary with search results and sources
@@ -63,14 +73,78 @@ class SearchService(BaseService):
                 }
             
             # For standard search without documents, return guidance message
-            elif not has_documents and chat_history is None:
+            elif not has_documents and chat_history is None and not use_news:
                 return {
                     "answer": "I don't have any intelligence documents to search yet. Please upload some documents in the 'Upload Documents' tab first.",
                     "sources": [],
                     "query": query
                 }
             
-            # Normal RAG-based search when documents are available
+            # Use the Multi Agent if both agent and news flags are enabled
+            if use_agent and use_news:
+                multi_response = self.multi_agent.query(
+                    query=query,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_k=top_k,
+                    chat_history=chat_history,
+                    days_back=7  # Default to 7 days for news, could be a parameter
+                )
+                
+                # Format sources for display
+                formatted_sources = self._format_multi_sources(multi_response["sources"])
+                
+                # Indicate if queries were refined
+                refined_info = ""
+                rag_refined = multi_response.get("rag_refined_query")
+                news_refined = multi_response.get("news_refined_query")
+                
+                if (rag_refined and rag_refined != query) or (news_refined and news_refined != query):
+                    refined_info = "\n\n(Note: I refined your query to get better results"
+                    if rag_refined and rag_refined != query:
+                        refined_info += f", RAG query: '{rag_refined}'"
+                    if news_refined and news_refined != query:
+                        refined_info += f", News query: '{news_refined}'"
+                    refined_info += ")"
+                
+                return {
+                    "answer": multi_response["answer"] + refined_info,
+                    "sources": formatted_sources,
+                    "query": query,
+                    "confidence": multi_response.get("confidence", "medium"),
+                    "primary_source": multi_response.get("primary_source", "combined"),
+                    "using_agent": True,
+                    "using_news": True
+                }
+            
+            # Use only the RAG agent if only the agent flag is enabled
+            elif use_agent and has_documents:
+                agent_response = self.rag_agent.query(
+                    query=query,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_k=top_k,
+                    chat_history=chat_history
+                )
+                
+                # Format sources for display
+                sources = self._format_sources(agent_response["sources"])
+                
+                # Indicate if query was refined
+                refined_info = ""
+                if agent_response.get("refined_query") and agent_response.get("refined_query") != query:
+                    refined_info = f"\n\n(Note: I refined your query to: '{agent_response['refined_query']}')"
+                    
+                return {
+                    "answer": agent_response["answer"] + refined_info,
+                    "sources": sources,
+                    "query": query,
+                    "confidence": agent_response.get("confidence", "medium"),
+                    "using_agent": True,
+                    "using_news": False
+                }
+            
+            # Legacy RAG approach (original implementation) if not using agent
             # Generate embedding for query
             query_embedding = self.embedding_generator.generate_query_embedding(
                 query, 
@@ -116,7 +190,9 @@ class SearchService(BaseService):
             return {
                 "answer": answer,
                 "sources": sources,
-                "query": query
+                "query": query,
+                "using_agent": False,
+                "using_news": False
             }
             
         except Exception as e:
@@ -131,80 +207,11 @@ class SearchService(BaseService):
                 "query": query
             }
     
-    def _local_text_analysis(self, query: str, chunks: List[Dict[str, Any]]) -> str:
-        """Generate a simple answer locally when LLM API is unavailable.
-        
-        Args:
-            query: The user's query
-            chunks: List of retrieved document chunks
-            
-        Returns:
-            Generated answer text
-        """
-        if not chunks:
-            return "No relevant information found in the documents."
-        
-        # Simple text extraction based on keyword matching
-        query_words = set(re.findall(r'\b\w+\b', query.lower()))
-        
-        # Remove common words to focus on important terms
-        common_words = {"what", "who", "where", "when", "how", "why", "is", "are", "the", "a", "an", "in", "on", "at", "to", "for", "of"}
-        query_keywords = query_words - common_words
-        
-        # If no meaningful keywords left, use simple summarization
-        if not query_keywords:
-            return "Found relevant information in the documents. Please check the sources below."
-        
-        # Look for sentences in chunks that match query keywords
-        response_parts = []
-        
-        # Check if it's asking for a specific named entity
-        name_patterns = [
-            (r'(?:who|what)\s+(?:is|are)\s+(?:the|a)?\s*(\w+)', "Extracting information about {}..."),
-            (r'(?:name|identify)\s+(?:of|the)?\s*(\w+)', "The name you're looking for might be {}..."),
-            (r'(?:which|what)\s+(\w+)', "According to the documents, {} is mentioned..."),
-        ]
-        
-        name_matches = []
-        for pattern, template in name_patterns:
-            matches = re.findall(pattern, query.lower())
-            for match in matches:
-                if match and match not in common_words:
-                    name_matches.append(match)
-        
-        # Check if any matches were found
-        if name_matches:
-            for chunk in chunks:
-                text = chunk["text"].lower()
-                for name in name_matches:
-                    if name in text:
-                        sentences = re.split(r'[.!?]', chunk["text"])
-                        for sentence in sentences:
-                            if name.lower() in sentence.lower():
-                                response_parts.append(sentence.strip())
-        
-        # If no specific matches, extract sentences with query keywords
-        if not response_parts:
-            for chunk in chunks:
-                text = chunk["text"]
-                sentences = re.split(r'[.!?]', text)
-                for sentence in sentences:
-                    if any(keyword in sentence.lower() for keyword in query_keywords):
-                        response_parts.append(sentence.strip())
-        
-        if response_parts:
-            # Combine unique sentences
-            unique_responses = list(set(response_parts))
-            return " ".join(unique_responses[:3])  # Limit to 3 sentences for clarity
-        else:
-            # Fallback to returning the most relevant chunk
-            return chunks[0]["text"]
-    
     def _format_context(self, chunks: List[Dict[str, Any]]) -> str:
-        """Format retrieved chunks into context for the LLM.
+        """Format retrieved chunks into context.
         
         Args:
-            chunks: List of retrieved document chunks
+            chunks: Retrieved document chunks
             
         Returns:
             Formatted context string
@@ -212,27 +219,127 @@ class SearchService(BaseService):
         context_parts = []
         
         for i, chunk in enumerate(chunks):
-            context_parts.append(f"[Document {i+1}]: {chunk['text']}")
+            # Format chunk with document reference
+            chunk_text = f"Document {i+1}: {chunk.get('metadata', {}).get('filename', 'Unknown')}\n\n"
+            chunk_text += chunk.get("text", "")
+            
+            context_parts.append(chunk_text)
         
         return "\n\n".join(context_parts)
     
     def _format_sources(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Format sources for display in the UI.
+        """Format sources for display in UI.
         
         Args:
-            chunks: List of retrieved document chunks
+            chunks: Retrieved document chunks
             
         Returns:
-            Formatted list of sources
+            Formatted source list
         """
         sources = []
         
         for i, chunk in enumerate(chunks):
-            sources.append({
-                "title": f"Excerpt {i+1}",
-                "content": chunk["text"],
-                "document": chunk["metadata"]["filename"] if "filename" in chunk["metadata"] else chunk["metadata"].get("document_name", "Unknown"),
-                "relevance": chunk["score"]
-            })
+            if isinstance(chunk, dict):
+                # For RAG agent sources that may have different format
+                source = {
+                    "title": f"Source {i+1}",
+                    "content": chunk.get("content", chunk.get("text", "")),
+                    "document": chunk.get("document", chunk.get("metadata", {}).get("filename", "Unknown")),
+                    "relevance": chunk.get("relevance", chunk.get("score", 0.0))
+                }
+                sources.append(source)
+            else:
+                # Fallback for other formats
+                sources.append({
+                    "title": f"Source {i+1}",
+                    "content": "Content not available",
+                    "document": "Unknown",
+                    "relevance": 0.0
+                })
         
-        return sources 
+        return sources
+    
+    def _format_multi_sources(self, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format multi-agent sources for display in UI.
+        
+        Args:
+            sources: Combined sources from multiple agents
+            
+        Returns:
+            Formatted source list
+        """
+        formatted_sources = []
+        
+        for i, source in enumerate(sources):
+            source_type = source.get("type", "unknown")
+            
+            if source_type == "document":
+                # Format document source
+                formatted_source = {
+                    "title": source.get("title", f"Document {i+1}"),
+                    "content": source.get("content", ""),
+                    "document": source.get("document", "Unknown"),
+                    "relevance": source.get("relevance", 0.0),
+                    "source_type": "Document"
+                }
+            elif source_type == "news":
+                # Format news source
+                formatted_source = {
+                    "title": source.get("title", f"News {i+1}"),
+                    "content": source.get("content", ""),
+                    "document": source.get("document", "Unknown Source"),
+                    "url": source.get("url", ""),
+                    "published_at": source.get("published_at", ""),
+                    "relevance": source.get("relevance", 0.0),
+                    "source_type": "News"
+                }
+            else:
+                # Fallback for unknown source types
+                formatted_source = {
+                    "title": f"Source {i+1}",
+                    "content": source.get("content", "Content not available"),
+                    "document": source.get("document", "Unknown"),
+                    "relevance": source.get("relevance", 0.0),
+                    "source_type": "Unknown"
+                }
+            
+            formatted_sources.append(formatted_source)
+        
+        return formatted_sources
+    
+    def _local_text_analysis(self, query: str, chunks: List[Dict[str, Any]]) -> str:
+        """Basic text analysis as fallback when LLM unavailable.
+        
+        Args:
+            query: User's query
+            chunks: Retrieved document chunks
+            
+        Returns:
+            Simple analysis result
+        """
+        combined_text = " ".join([chunk.get("text", "") for chunk in chunks])
+        
+        # Extract query terms (excluding common words)
+        common_words = {"what", "who", "where", "when", "how", "why", "is", "are", 
+                      "the", "a", "an", "in", "on", "at", "to", "for", "of"}
+        query_words = set(re.findall(r'\b\w+\b', query.lower())) - common_words
+        
+        # Find sentences with query terms
+        sentences = re.split(r'(?<=[.!?])\s+', combined_text)
+        relevant_sentences = []
+        
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            for word in query_words:
+                if word in sentence_lower:
+                    relevant_sentences.append(sentence)
+                    break
+        
+        if relevant_sentences:
+            # Return the relevant sentences (max 5)
+            response = "Based on the documents, I found this information:\n\n"
+            response += " ".join(relevant_sentences[:5])
+            response += "\n\n(Note: This is a simplified analysis. The AI service may be temporarily unavailable.)"
+            return response
+        else:
+            return "I found some documents that might be relevant, but couldn't generate a specific answer. Please try again later when the AI service is available." 

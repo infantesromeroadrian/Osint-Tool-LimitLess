@@ -1,9 +1,12 @@
-from typing import List, Dict, Any, Union
+"""
+Embedding generator for vector search.
+"""
+import os
+import time
 import numpy as np
+from typing import List, Dict, Any, Optional, Union
 from sentence_transformers import SentenceTransformer
 import openai
-import time
-import os
 from collections import Counter
 import hashlib
 
@@ -13,168 +16,139 @@ class EmbeddingGenerator:
     def __init__(self):
         """Initialize the embedding generator."""
         self.models = {}
-        self.fallback_mode = False
+        self.embedding_dim = 384  # Fallback embedding dimension
     
     def generate_embeddings(
         self, 
-        texts: List[str], 
+        chunks: List[str],
         model_name: str = "all-MiniLM-L6-v2"
     ) -> List[np.ndarray]:
-        """Generate embeddings for a list of text chunks.
+        """Generate embeddings for text chunks.
         
         Args:
-            texts: List of text chunks to embed
-            model_name: Name of the embedding model to use
-            
-        Returns:
-            List of embedding vectors
-        """
-        # First try using specified model
-        try:
-            if model_name == "text-embedding-ada-002":
-                return self._generate_openai_embeddings(texts)
-            else:
-                return self._generate_sentence_transformer_embeddings(texts, model_name)
-        except Exception as e:
-            print(f"DEBUG: Error generating embeddings with model {model_name}: {str(e)}")
-            print("DEBUG: Falling back to simple embedding method")
-            self.fallback_mode = True
-            return self._generate_simple_embeddings(texts)
-    
-    def generate_query_embedding(
-        self, 
-        query: str, 
-        model_name: str = "all-MiniLM-L6-v2"
-    ) -> np.ndarray:
-        """Generate embedding for a single query text.
-        
-        Args:
-            query: Query text to embed
-            model_name: Name of the embedding model to use
-            
-        Returns:
-            Embedding vector for the query
-        """
-        embeddings = self.generate_embeddings([query], model_name)
-        return embeddings[0]
-    
-    def _get_model(self, model_name: str) -> SentenceTransformer:
-        """Get or load a SentenceTransformer model.
-        
-        Args:
-            model_name: Name of the model to load
-            
-        Returns:
-            Loaded model instance
-        """
-        if model_name not in self.models:
-            # Try loading with retry mechanism
-            max_retries = 3
-            for i in range(max_retries):
-                try:
-                    print(f"DEBUG: Loading model {model_name}, attempt {i+1}/{max_retries}")
-                    self.models[model_name] = SentenceTransformer(model_name)
-                    print(f"DEBUG: Successfully loaded model {model_name}")
-                    break
-                except Exception as e:
-                    print(f"DEBUG: Error loading model {model_name}: {str(e)}")
-                    if i < max_retries - 1:
-                        backoff_time = 2 ** i
-                        print(f"DEBUG: Retrying in {backoff_time} seconds...")
-                        time.sleep(backoff_time)
-                    else:
-                        print(f"DEBUG: Failed to load model after {max_retries} attempts")
-                        raise
-        return self.models[model_name]
-    
-    def _generate_sentence_transformer_embeddings(
-        self, 
-        texts: List[str],
-        model_name: str
-    ) -> List[np.ndarray]:
-        """Generate embeddings using SentenceTransformers.
-        
-        Args:
-            texts: List of text chunks to embed
+            chunks: List of text chunks
             model_name: Name of the model to use
             
         Returns:
             List of embedding vectors
         """
-        model = self._get_model(model_name)
-        embeddings = model.encode(texts, show_progress_bar=False)
-        return embeddings
+        try:
+            # Try to use the transformer model
+            model = self._load_model(model_name)
+            
+            if model:
+                print(f"DEBUG: Generating {len(chunks)} embeddings with model {model_name}")
+                embeddings = model.encode(chunks)
+                print(f"DEBUG: Generated {len(embeddings)} embeddings using {model_name}")
+                return [np.array(embedding) for embedding in embeddings]
+            else:
+                # Fallback to simple embeddings if model loading failed
+                return self._generate_simple_embeddings(chunks)
+                
+        except Exception as e:
+            print(f"DEBUG: Error generating embeddings with model {model_name}: {str(e)}")
+            print(f"DEBUG: Falling back to simple embedding method")
+            
+            # Fallback to simple embeddings
+            return self._generate_simple_embeddings(chunks)
     
-    def _generate_openai_embeddings(self, texts: List[str]) -> List[np.ndarray]:
-        """Generate embeddings using OpenAI API.
+    def generate_query_embedding(
+        self, 
+        query: str,
+        model_name: str = "all-MiniLM-L6-v2"
+    ) -> np.ndarray:
+        """Generate embedding for a query.
         
         Args:
-            texts: List of text chunks to embed
+            query: Query text
+            model_name: Name of the model to use
             
         Returns:
-            List of embedding vectors
+            Query embedding vector
         """
-        embeddings = []
+        # Generate embeddings for the single query
+        embeddings = self.generate_embeddings([query], model_name)
         
-        # Process in batches to respect API limits
-        batch_size = 20
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            
-            response = openai.embeddings.create(
-                model="text-embedding-ada-002",
-                input=batch
-            )
-            
-            batch_embeddings = [np.array(item.embedding) for item in response.data]
-            embeddings.extend(batch_embeddings)
-        
-        return embeddings
+        # Return the first (and only) embedding
+        return embeddings[0]
     
-    def _generate_simple_embeddings(self, texts: List[str], dim: int = 384) -> List[np.ndarray]:
-        """Generate simple embeddings without external models.
-        
-        This is a fallback method that creates embeddings based on word frequency and
-        hashing when the primary methods fail. Not as effective but works offline.
+    def _load_model(self, model_name: str, max_retries: int = 3) -> Optional[SentenceTransformer]:
+        """Load the transformer model with retries.
         
         Args:
-            texts: List of text chunks to embed
-            dim: Dimensionality of embeddings (to match expected dimensions)
+            model_name: Name of the model to load
+            max_retries: Maximum number of retry attempts
             
         Returns:
-            List of embedding vectors
+            Loaded model or None if loading fails
         """
-        print(f"DEBUG: Generating {len(texts)} simple embeddings of dimension {dim}")
+        # Check if model is already loaded
+        if model_name in self.models:
+            return self.models[model_name]
+        
+        # Try loading the model with retries
+        for attempt in range(1, max_retries + 1):
+            try:
+                print(f"DEBUG: Loading model {model_name}, attempt {attempt}/{max_retries}")
+                
+                # Use offline mode as fallback for repeated failures
+                if attempt > 1:
+                    # Try to load in offline mode if the model might already be downloaded
+                    os.environ['TRANSFORMERS_OFFLINE'] = '1'
+                
+                model = SentenceTransformer(model_name)
+                
+                # Reset offline mode
+                if 'TRANSFORMERS_OFFLINE' in os.environ:
+                    del os.environ['TRANSFORMERS_OFFLINE']
+                
+                # Cache the model for future use
+                self.models[model_name] = model
+                
+                return model
+                
+            except Exception as e:
+                print(f"DEBUG: Error loading model {model_name}: {str(e)}")
+                
+                # Sleep before retrying, with exponential backoff
+                if attempt < max_retries:
+                    retry_delay = attempt * 1
+                    print(f"DEBUG: Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"DEBUG: Failed to load model after {max_retries} attempts")
+                    
+                    # Reset offline mode if it was set
+                    if 'TRANSFORMERS_OFFLINE' in os.environ:
+                        del os.environ['TRANSFORMERS_OFFLINE']
+                    
+                    return None
+    
+    def _generate_simple_embeddings(self, chunks: List[str]) -> List[np.ndarray]:
+        """Generate simple embeddings as fallback.
+        
+        Args:
+            chunks: List of text chunks
+            
+        Returns:
+            List of simple embedding vectors
+        """
+        print(f"DEBUG: Generating {len(chunks)} simple embeddings of dimension {self.embedding_dim}")
+        
         embeddings = []
         
-        for text in texts:
-            # Create word frequency vector
-            words = text.lower().split()
-            counter = Counter(words)
+        for chunk in chunks:
+            # Create a reproducible but unique embedding based on the text
+            # Not semantically meaningful but consistent for the same text
+            np.random.seed(hash(chunk) % 2**32)
             
-            # Hash-based embedding for stability across runs
-            embedding = np.zeros(dim, dtype=np.float32)
+            # Generate a random vector but consistent for the same text
+            embedding = np.random.rand(self.embedding_dim).astype(np.float32)
             
-            for word, count in counter.items():
-                # Generate a stable hash for each word
-                word_hash = int(hashlib.md5(word.encode()).hexdigest(), 16)
-                
-                # Use the hash to determine positions in the embedding
-                positions = [word_hash % dim]
-                # Add a few more positions for more signal
-                for i in range(5):
-                    positions.append((word_hash + i*100) % dim)
-                
-                # Set those positions based on word frequency
-                for pos in positions:
-                    embedding[pos] += count
+            # Normalize the vector to unit length
+            embedding = embedding / np.linalg.norm(embedding)
             
-            # Normalize
-            norm = np.linalg.norm(embedding)
-            if norm > 0:
-                embedding = embedding / norm
-                
             embeddings.append(embedding)
-            
+        
         print(f"DEBUG: Generated {len(embeddings)} simple embeddings successfully")
         return embeddings 
