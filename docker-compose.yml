@@ -1,0 +1,40 @@
+services:
+  osint-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: limitless-osint
+    ports:
+      - "9000:8501"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Add DNS configuration to fix name resolution issues
+    dns:
+      - 8.8.8.8  # Google DNS
+      - 8.8.4.4  # Google DNS backup
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - osint-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    # Add logging configuration to prevent truncation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
+
+networks:
+  osint-network:
+    driver: bridge 

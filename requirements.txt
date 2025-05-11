@@ -1,0 +1,25 @@
+# Ya instalados en el Dockerfile, no es necesario duplicar
+# numpy
+# pandas
+# torch
+# huggingface-hub==0.16.4 (ya instalado)
+# transformers==4.30.2 (ya instalado)
+# sentence-transformers==2.2.2 (ya instalado)
+# openai==0.28.1 (ya instalado en el Dockerfile)
+
+# UI
+streamlit==1.27.0
+python-dotenv==1.0.0
+
+# RAG components
+# openai==0.28.1
+chromadb==0.4.17
+# sentence-transformers ya instalado anteriormente
+
+# Document processing
+PyPDF2==3.0.1
+python-docx==0.8.11
+
+# NLP tools
+nltk==3.8.1
+spacy==3.6.1 
