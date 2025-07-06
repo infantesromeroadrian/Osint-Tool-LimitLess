@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LimitLess OSINT Tool - Tony Stark Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Background Grid -->
+    <div class="grid-background"></div>
+    
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-container">
+                <div class="arc-reactor">
+                    <div class="reactor-core"></div>
+                    <div class="reactor-ring"></div>
+                </div>
+                <h1 class="title">LimitLess OSINT</h1>
+            </div>
+            
+            <!-- Case Management -->
+            <div class="case-management">
+                <div class="active-case" id="activeCaseDisplay">
+                    <span class="case-label">ACTIVE CASE:</span>
+                    <span class="case-name" id="activeCaseName">None</span>
+                </div>
+                <div class="case-actions">
+                    <button class="nav-btn" id="newCaseBtn">
+                        <i class="fas fa-plus"></i>
+                        NEW CASE
+                    </button>
+                    <select class="case-selector" id="caseSelector" title="Select active case">
+                        <option value="">Select Case...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="status-indicator">
+                <div class="status-light active"></div>
+                <span class="status-text">RAG SYSTEM ONLINE</span>
+            </div>
+        </header>
+
+        <!-- Main Interface -->
+        <main class="main-interface">
+            <!-- Central Console -->
+            <div class="central-console">
+                <div class="console-header">
+                    <h2>LANGCHAIN RAG INTERFACE</h2>
+                    <div class="power-level">
+                        <span>POWER: </span>
+                        <div class="power-bar">
+                            <div class="power-fill"></div>
+                        </div>
+                        <span>100%</span>
+                    </div>
+                </div>
+                
+                <!-- Input Area -->
+                <div class="input-area">
+                    <div class="input-container">
+                        <i class="fas fa-microphone microphone-icon" id="micIcon"></i>
+                        <input type="text" id="commandInput" placeholder="Enter your intelligence data or query..." class="command-input">
+                        <button class="execute-btn" id="executeBtn">
+                            <i class="fas fa-play"></i>
+                            EXECUTE
+                        </button>
+                    </div>
+                    <!-- Hidden file input for image analysis -->
+                    <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                    
+                    <!-- Hidden file input for metadata extraction -->
+                    <input type="file" id="metadataFileInput" accept="*/*" style="display: none;">
+                    
+                    <!-- Image Analysis Type Selector -->
+                    <div class="analysis-type-selector" id="analysisTypeSelector" style="display: none;">
+                        <label for="analysisType">Analysis Type:</label>
+                        <select id="analysisType" name="analysis_type">
+                            <option value="general">General Analysis</option>
+                            <option value="aircraft">Aircraft Analysis</option>
+                            <option value="person">Person Analysis</option>
+                            <option value="vehicle">Vehicle Analysis</option>
+                            <option value="document">Document Analysis</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <button class="action-btn" id="addDataBtn">
+                        <i class="fas fa-plus"></i>
+                        <span>ADD DATA</span>
+                    </button>
+                    <button class="action-btn active" id="chatBtn">
+                        <i class="fas fa-comments"></i>
+                        <span>CHAT MODE</span>
+                    </button>
+                    <button class="action-btn" id="imageBtn">
+                        <i class="fas fa-image"></i>
+                        <span>ANALYZE IMAGE</span>
+                    </button>
+                    <button class="action-btn" id="metadataBtn">
+                        <i class="fas fa-file-search"></i>
+                        <span>EXTRACT METADATA</span>
+                    </button>
+                    <button class="action-btn" id="clearChatBtn">
+                        <i class="fas fa-broom"></i>
+                        <span>CLEAR CHAT</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Side Panels -->
+            <div class="side-panels">
+                <!-- Left Panel - System Info -->
+                <div class="panel left-panel">
+                    <h3>SYSTEM STATUS</h3>
+                    <div class="system-metrics">
+                        <div class="metric">
+                            <span class="metric-label">LLM ENGINE:</span>
+                            <span class="metric-value" id="llmStatus">GPT-4.1</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">VECTOR STORE:</span>
+                            <span class="metric-value" id="vectorStatus">CHROMA</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">RAG STATUS:</span>
+                            <span class="metric-value" id="ragStatus">ACTIVE</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">QUERIES:</span>
+                            <span class="metric-value" id="queryCount">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel - Recent Activity -->
+                <div class="panel right-panel">
+                    <h3>ACTIVITY LOG</h3>
+                    <div class="activity-log" id="activityLog">
+                        <div class="log-entry">
+                            <span class="log-time">00:00:00</span>
+                            <span class="log-message">LangChain RAG initialized</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Chat Area -->
+        <section class="chat-area" id="chatArea">
+            <div class="chat-header">
+                <h3>💬 INTELLIGENT CONVERSATION</h3>
+                <div class="chat-controls">
+                    <button class="action-btn" id="statsBtn" title="System Statistics">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>STATS</span>
+                    </button>
+                    <button class="clear-btn" id="clearResults" title="Clear Chat History">
+                        <i class="fas fa-trash"></i>
+                        CLEAR
+                    </button>
+                </div>
+            </div>
+            <div class="chat-container" id="chatContainer">
+                <div class="welcome-message">
+                    <div class="assistant-message">
+                        <div class="message-content">
+                            <h4>🤖 LimitLess OSINT Assistant</h4>
+                            <p>¡Hola! Soy tu asistente de inteligencia. Puedo ayudarte con:</p>
+                            <ul>
+                                <li>📊 Análisis de documentos y datos del RAG</li>
+                                <li>🔍 Búsquedas contextuales inteligentes</li>
+                                <li>💬 Conversaciones continuas con memoria</li>
+                                <li>📁 Información sobre casos activos</li>
+                            </ul>
+                            <p>Haz una pregunta para comenzar la conversación...</p>
+                        </div>
+                        <div class="message-time">Sistema iniciado</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <div class="loading-text">PROCESSING...</div>
+        </div>
+    </div>
+
+    <!-- New Case Modal -->
+    <div class="modal-overlay" id="newCaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus"></i> CREATE NEW CASE</h3>
+                <button class="modal-close" id="closeNewCaseModal" title="Close modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="newCaseForm">
+                    <div class="form-group">
+                        <label for="caseTitle">Case Title *</label>
+                        <input type="text" id="caseTitle" name="title" required 
+                               placeholder="Enter case title..." maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="caseType">Case Type</label>
+                        <select id="caseType" name="case_type">
+                            <option value="intelligence">Intelligence</option>
+                            <option value="investigation">Investigation</option>
+                            <option value="surveillance">Surveillance</option>
+                            <option value="analysis">Analysis</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="caseDescription">Description</label>
+                        <textarea id="caseDescription" name="description" 
+                                  placeholder="Enter case description..." rows="4"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="clear-btn" id="cancelNewCase">
+                            <i class="fas fa-times"></i> CANCEL
+                        </button>
+                        <button type="submit" class="execute-btn">
+                            <i class="fas fa-plus"></i> CREATE CASE
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let queryCount = 0;
+        let currentMode = 'chat'; // 'add', 'chat', 'image', 'metadata'
+        let conversation = [];
+
+        // Inicializar aplicación
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSystem();
+        });
+
+        // Event Listeners
+        document.getElementById('executeBtn').addEventListener('click', executeCommand);
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') executeCommand();
+        });
+
+        document.getElementById('addDataBtn').addEventListener('click', () => setMode('add'));
+        document.getElementById('chatBtn').addEventListener('click', () => setMode('chat'));
+        document.getElementById('imageBtn').addEventListener('click', () => setMode('image'));
+        document.getElementById('metadataBtn').addEventListener('click', () => setMode('metadata'));
+        document.getElementById('clearChatBtn').addEventListener('click', clearChatHistory);
+        document.getElementById('statsBtn').addEventListener('click', showStats);
+        document.getElementById('clearResults').addEventListener('click', clearChatHistory);
+        
+        // Event listener for image file input
+        document.getElementById('imageFileInput').addEventListener('change', handleImageUpload);
+        
+        // Event listener for metadata file input
+        document.getElementById('metadataFileInput').addEventListener('change', handleMetadataUpload);
+        
+        // Case management event listeners
+        document.getElementById('newCaseBtn').addEventListener('click', showNewCaseModal);
+        document.getElementById('closeNewCaseModal').addEventListener('click', hideNewCaseModal);
+        document.getElementById('cancelNewCase').addEventListener('click', hideNewCaseModal);
+        document.getElementById('newCaseForm').addEventListener('submit', handleCreateCase);
+        document.getElementById('caseSelector').addEventListener('change', handleCaseSelection);
+
+        // Funciones principales
+        function setMode(mode) {
+            currentMode = mode;
+            const input = document.getElementById('commandInput');
+            const executeBtn = document.getElementById('executeBtn');
+            const analysisTypeSelector = document.getElementById('analysisTypeSelector');
+            
+            // Remover clase active de todos los botones
+            document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Ocultar selector por defecto
+            analysisTypeSelector.style.display = 'none';
+            
+            if (mode === 'add') {
+                input.placeholder = 'Enter intelligence data to add to RAG system...';
+                executeBtn.innerHTML = '<i class="fas fa-plus"></i> ADD DATA';
+                document.getElementById('addDataBtn').classList.add('active');
+                addLogEntry('Mode: ADD DATA');
+            } else if (mode === 'chat') {
+                input.placeholder = 'Type your message to start an intelligent conversation...';
+                executeBtn.innerHTML = '<i class="fas fa-comments"></i> SEND MESSAGE';
+                document.getElementById('chatBtn').classList.add('active');
+                addLogEntry('Mode: INTELLIGENT CHAT');
+            } else if (mode === 'image') {
+                input.placeholder = 'Select analysis type and click ANALYZE IMAGE to upload...';
+                executeBtn.innerHTML = '<i class="fas fa-image"></i> ANALYZE IMAGE';
+                analysisTypeSelector.style.display = 'block';
+                document.getElementById('imageBtn').classList.add('active');
+                addLogEntry('Mode: IMAGE ANALYSIS');
+            } else if (mode === 'metadata') {
+                input.placeholder = 'Click EXTRACT METADATA to select file for metadata extraction...';
+                executeBtn.innerHTML = '<i class="fas fa-file-search"></i> EXTRACT METADATA';
+                document.getElementById('metadataBtn').classList.add('active');
+                addLogEntry('Mode: METADATA EXTRACTION');
+            }
+        }
+
+        function executeCommand() {
+            if (currentMode === 'image') {
+                // Trigger file input for image analysis
+                document.getElementById('imageFileInput').click();
+                return;
+            }
+            
+            if (currentMode === 'metadata') {
+                // Trigger file input for metadata extraction
+                document.getElementById('metadataFileInput').click();
+                return;
+            }
+            
+            const input = document.getElementById('commandInput');
+            const command = input.value.trim();
+            
+            if (!command) {
+                addLogEntry('Error: Empty command');
+                return;
+            }
+
+            showLoading(true);
+            addLogEntry(`Executing: ${command.substring(0, 30)}...`);
+
+            if (currentMode === 'add') {
+                addDataToRAG(command);
+            } else if (currentMode === 'chat') {
+                sendChatMessage(command);
+            } else {
+                // Legacy query mode
+                queryRAG(command);
+            }
+
+            input.value = '';
+        }
+
+        function addDataToRAG(text) {
+            fetch('/process_text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    addLogEntry('Data added successfully');
+                    addMessageToChat('system', '✅ Data successfully added to RAG system');
+                } else {
+                    addLogEntry(`Error: ${data.error}`);
+                    addMessageToChat('system', `❌ Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                addMessageToChat('system', `🔴 Connection Error: ${error.toString()}`);
+            });
+        }
+
+        function sendChatMessage(message) {
+            // Agregar mensaje del usuario al chat
+            addMessageToChat('user', message);
+            
+            // Mostrar indicador de typing
+            showTypingIndicator(true);
+            
+            fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                showTypingIndicator(false);
+                
+                if (data.success) {
+                    queryCount++;
+                    document.getElementById('queryCount').textContent = queryCount;
+                    
+                    const result = data.result;
+                    const hasContext = data.has_conversation_context;
+                    const caseContext = data.case_context;
+                    
+                    // Agregar respuesta del asistente
+                    let response = result.answer;
+                    
+                    // Agregar información de contexto si es relevante
+                    if (hasContext) {
+                        response += '\n\n💭 *Respuesta basada en contexto de conversación*';
+                    }
+                    
+                    if (caseContext) {
+                        response += `\n\n📁 *${caseContext}*`;
+                    }
+                    
+                    addMessageToChat('assistant', response, {
+                        processing_time: result.processing_time,
+                        sources: result.source_documents ? result.source_documents.length : 0
+                    });
+                    
+                    // Actualizar conversación local
+                    conversation = data.conversation || [];
+                    
+                    addLogEntry(`Chat response: ${result.processing_time.toFixed(2)}s, ${result.source_documents ? result.source_documents.length : 0} sources`);
+                } else {
+                    addMessageToChat('system', `❌ Error: ${data.error}`);
+                    addLogEntry(`Chat error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                showTypingIndicator(false);
+                addMessageToChat('system', `🔴 Connection Error: ${error.toString()}`);
+                addLogEntry(`Connection error: ${error}`);
+            });
+        }
+
+        function addMessageToChat(role, content, metadata = {}) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            const isUser = role === 'user';
+            const isSystem = role === 'system';
+            
+            messageDiv.className = isUser ? 'user-message' : 'assistant-message';
+            
+            if (isSystem) {
+                messageDiv.className = 'assistant-message';
+            }
+            
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let messageHTML = `
+                <div class="message-content">
+                    ${isSystem ? `<div style="color: var(--gold); font-weight: bold; margin-bottom: 8px;">🤖 System</div>` : ''}
+                    <p>${content.replace(/\n/g, '<br>')}</p>
+                    ${metadata.processing_time ? `
+                        <div class="source-documents">
+                            <h6>📊 Response Metrics:</h6>
+                            <div class="source-item">Processing Time: ${metadata.processing_time.toFixed(2)}s</div>
+                            <div class="source-item">RAG Sources: ${metadata.sources || 0}</div>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="message-time">${timestamp}</div>
+            `;
+            
+            messageDiv.innerHTML = messageHTML;
+            
+            // Remover mensaje de bienvenida si existe
+            const welcomeMessage = chatContainer.querySelector('.welcome-message');
+            if (welcomeMessage && isUser) {
+                welcomeMessage.remove();
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTypingIndicator(show) {
+            const chatContainer = document.getElementById('chatContainer');
+            const existingIndicator = chatContainer.querySelector('.typing-indicator');
+            
+            if (show && !existingIndicator) {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'typing-indicator';
+                typingDiv.innerHTML = `
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                `;
+                chatContainer.appendChild(typingDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } else if (!show && existingIndicator) {
+                existingIndicator.remove();
+            }
+        }
+
+        function clearChatHistory() {
+            fetch('/chat/clear', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const chatContainer = document.getElementById('chatContainer');
+                    chatContainer.innerHTML = `
+                        <div class="welcome-message">
+                            <div class="assistant-message">
+                                <div class="message-content">
+                                    <h4>🤖 LimitLess OSINT Assistant</h4>
+                                    <p>¡Hola! Soy tu asistente de inteligencia. Puedo ayudarte con:</p>
+                                    <ul>
+                                        <li>📊 Análisis de documentos y datos del RAG</li>
+                                        <li>🔍 Búsquedas contextuales inteligentes</li>
+                                        <li>💬 Conversaciones continuas con memoria</li>
+                                        <li>📁 Información sobre casos activos</li>
+                                    </ul>
+                                    <p>Haz una pregunta para comenzar la conversación...</p>
+                                </div>
+                                <div class="message-time">Chat reiniciado</div>
+                            </div>
+                        </div>
+                    `;
+                    conversation = [];
+                    addLogEntry('Chat history cleared');
+                }
+            })
+            .catch(error => {
+                addLogEntry(`Error clearing chat: ${error}`);
+            });
+        }
+
+        function queryRAG(question) {
+            fetch('/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                queryCount++;
+                document.getElementById('queryCount').textContent = queryCount;
+                
+                if (data.success) {
+                    const result = data.result;
+                    addLogEntry(`Query completed: ${result.processing_time.toFixed(2)}s`);
+                    showQueryResult(result);
+                } else {
+                    addLogEntry(`Query error: ${data.error}`);
+                    showResult('QUERY ERROR', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                showResult('CONNECTION ERROR', error.toString(), 'error');
+            });
+        }
+
+        function showQueryResult(result) {
+            const resultsContent = document.getElementById('resultsContent');
+            const sourceCount = result.source_documents ? result.source_documents.length : 0;
+            
+            resultsContent.innerHTML = `
+                <div class="processing-results">
+                    <div class="result-header">
+                        <h4>QUERY ANALYSIS</h4>
+                        <span class="result-timestamp">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h5>QUESTION:</h5>
+                        <p style="color: var(--primary-blue); margin: 10px 0;">${result.question}</p>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h5>AI RESPONSE:</h5>
+                        <div class="ai-response">${result.answer}</div>
+                    </div>
+                    
+                    <div class="result-stats">
+                        <div class="metric">
+                            <span class="metric-label">Processing Time:</span>
+                            <span class="metric-value">${result.processing_time.toFixed(2)}s</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Source Documents:</span>
+                            <span class="metric-value">${sourceCount}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Timestamp:</span>
+                            <span class="metric-value">${result.timestamp}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showResult(title, message, type) {
+            const resultsContent = document.getElementById('resultsContent');
+            const colorClass = type === 'success' ? 'var(--primary-blue)' : 'var(--gold)';
+            
+            resultsContent.innerHTML = `
+                <div class="processing-results">
+                    <div class="result-header">
+                        <h4 style="color: ${colorClass}">${title}</h4>
+                        <span class="result-timestamp">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    <div class="result-section">
+                        <p style="color: var(--white);">${message}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showStats() {
+            fetch('/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.stats;
+                    showResult('SYSTEM STATISTICS', 
+                        `Vector Store: ${stats.vector_store_status}<br>
+                         QA Chain: ${stats.qa_chain_status}<br>
+                         Chunk Size: ${stats.chunk_size}<br>
+                         Similarity Threshold: ${stats.similarity_threshold}<br>
+                         LangChain Version: ${stats.langchain_version}`, 
+                        'success');
+                    addLogEntry('System stats displayed');
+                }
+            })
+            .catch(error => {
+                addLogEntry(`Stats error: ${error}`);
+            });
+        }
+
+        // Esta función ya no se usa, reemplazada por clearChatHistory
+
+        function loadSystemStats() {
+            fetch('/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const stats = data.stats;
+                    document.getElementById('vectorStatus').textContent = 
+                        stats.vector_store_status === 'inicializado' ? 'ONLINE' : 'OFFLINE';
+                    document.getElementById('ragStatus').textContent = 
+                        stats.qa_chain_status === 'inicializado' ? 'ACTIVE' : 'INACTIVE';
+                }
+            })
+            .catch(error => console.error('Error loading stats:', error));
+        }
+
+        function addLogEntry(message) {
+            const activityLog = document.getElementById('activityLog');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-message">${message}</span>
+            `;
+            activityLog.insertBefore(entry, activityLog.firstChild);
+            
+            // Mantener solo las últimas 10 entradas
+            while (activityLog.children.length > 10) {
+                activityLog.removeChild(activityLog.lastChild);
+            }
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = show ? 'flex' : 'none';
+        }
+
+        // Handle image upload and analysis
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Obtener tipo de análisis seleccionado
+            const analysisType = document.getElementById('analysisType').value;
+            const analysisTypeText = document.getElementById('analysisType').selectedOptions[0].text;
+            
+            addLogEntry(`Image selected: ${file.name} - Type: ${analysisTypeText}`);
+            showLoading(true);
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('analysis_type', analysisType);
+            
+            fetch('/analyze_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    const analysis = data.analysis;
+                    const isQuickAnalysis = data.quick_analysis;
+                    
+                    if (isQuickAnalysis) {
+                        addLogEntry(`${analysisTypeText} completed (Quick Mode): ${analysis.processing_time.toFixed(2)}s`);
+                    } else {
+                        addLogEntry(`${analysisTypeText} completed: ${analysis.processing_time.toFixed(2)}s`);
+                    }
+                    
+                    // Agregar resultado al chat
+                    const resultSummary = `🖼️ **${analysisTypeText}** ${isQuickAnalysis ? '(Quick Mode)' : ''}\n\n` +
+                        `**Analysis:** ${analysis.analysis.substring(0, 300)}...\n\n` +
+                        `⚡ Processing Time: ${analysis.processing_time.toFixed(2)}s\n` +
+                        `🎯 Analysis Type: ${analysis.analysis_type}\n` +
+                        `🤖 Model: ${analysis.model_used}`;
+                    
+                    addMessageToChat('assistant', resultSummary, {
+                        processing_time: analysis.processing_time,
+                        sources: 0
+                    });
+                    
+                    // También mostrar en interfaz tradicional si no estamos en modo chat
+                    if (currentMode === 'image') {
+                        showImageAnalysisResult(analysis, isQuickAnalysis);
+                    }
+                } else {
+                    addLogEntry(`Image analysis error: ${data.error}`);
+                    addMessageToChat('system', `❌ Image Analysis Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                showResult('CONNECTION ERROR', error.toString(), 'error');
+            });
+            
+            // Clear file input
+            event.target.value = '';
+        }
+
+        function showImageAnalysisResult(analysis, isQuickAnalysis = false) {
+            const resultsContent = document.getElementById('resultsContent');
+            const extractedInfo = analysis.extracted_info || {};
+            const analysisType = analysis.analysis_type || 'general';
+            
+            // Iconos según tipo de análisis
+            const typeIcons = {
+                'aircraft': '✈️',
+                'person': '👤',
+                'vehicle': '🚗',
+                'document': '📄',
+                'general': '🔍'
+            };
+            
+            // Títulos según tipo de análisis
+            const typeTitles = {
+                'aircraft': 'AIRCRAFT ANALYSIS',
+                'person': 'PERSON ANALYSIS',
+                'vehicle': 'VEHICLE ANALYSIS',
+                'document': 'DOCUMENT ANALYSIS',
+                'general': 'IMAGE ANALYSIS'
+            };
+            
+            const icon = typeIcons[analysisType] || '🔍';
+            const title = typeTitles[analysisType] || 'IMAGE ANALYSIS';
+            const quickModeIndicator = isQuickAnalysis ? ' <span style="color: var(--gold); font-size: 0.8em;">(QUICK MODE)</span>' : '';
+            
+            resultsContent.innerHTML = `
+                <div class="processing-results">
+                    <div class="result-header">
+                        <h4>${icon} ${title}${quickModeIndicator}</h4>
+                        <span class="result-timestamp">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    
+                    ${isQuickAnalysis ? `
+                    <div class="result-section" style="background-color: rgba(255, 193, 7, 0.1); border-left: 3px solid var(--gold); padding-left: 15px;">
+                        <h5>⚡ QUICK MODE:</h5>
+                        <p style="color: var(--gold); margin: 5px 0;">Analysis performed without active case. Create a case to save results and build investigation history.</p>
+                    </div>` : ''}
+                    
+                    <div class="result-section">
+                        <h5>🎯 AI ANALYSIS:</h5>
+                        <div class="ai-response">${analysis.analysis}</div>
+                    </div>
+                    
+                    ${Object.keys(extractedInfo).length > 0 ? `
+                    <div class="result-section">
+                        <h5>📊 EXTRACTED INFO:</h5>
+                        <div class="extracted-info">
+                            ${Object.entries(extractedInfo).map(([key, value]) => 
+                                `<div class="info-item">
+                                    <strong>${key.replace('_', ' ').toUpperCase()}:</strong> ${value}
+                                </div>`
+                            ).join('')}
+                        </div>
+                    </div>` : ''}
+                    
+                    ${analysis.metadata && analysis.metadata.success ? `
+                    <div class="result-section">
+                        <h5>📁 FILE METADATA:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>File Size:</strong> ${analysis.metadata.basic?.size_mb || 0} MB</div>
+                            <div class="info-item"><strong>Dimensions:</strong> ${analysis.metadata.specific?.image_info?.width || 'Unknown'} x ${analysis.metadata.specific?.image_info?.height || 'Unknown'}</div>
+                            <div class="info-item"><strong>Format:</strong> ${analysis.metadata.specific?.image_info?.format || 'Unknown'}</div>
+                            ${analysis.metadata.specific?.exif ? `<div class="info-item"><strong>EXIF Fields:</strong> ${Object.keys(analysis.metadata.specific.exif).length} found</div>` : ''}
+                        </div>
+                    </div>` : ''}
+                    
+                    <div class="result-stats">
+                        <div class="metric">
+                            <span class="metric-label">Analysis Type:</span>
+                            <span class="metric-value">${analysisType.toUpperCase()}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Processing Time:</span>
+                            <span class="metric-value">${analysis.processing_time.toFixed(2)}s</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Model Used:</span>
+                            <span class="metric-value">${analysis.model_used}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Case Management Functions
+        function loadCases() {
+            fetch('/cases')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateCaseSelector(data.cases);
+                    updateActiveCaseDisplay(data.active_case);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading cases:', error);
+                addLogEntry('Error loading cases');
+            });
+        }
+
+        function updateCaseSelector(cases) {
+            const selector = document.getElementById('caseSelector');
+            selector.innerHTML = '<option value="">Select Case...</option>';
+            
+            cases.forEach(caseData => {
+                const option = document.createElement('option');
+                option.value = caseData.case_id;
+                option.textContent = `${caseData.title} (${caseData.case_type})`;
+                selector.appendChild(option);
+            });
+        }
+
+        function updateActiveCaseDisplay(activeCase) {
+            const caseName = document.getElementById('activeCaseName');
+            if (activeCase) {
+                caseName.textContent = activeCase.title;
+                caseName.style.color = 'var(--primary-blue)';
+                
+                // Update selector
+                const selector = document.getElementById('caseSelector');
+                selector.value = activeCase.case_id;
+            } else {
+                caseName.textContent = 'None';
+                caseName.style.color = 'var(--gray-light)';
+            }
+        }
+
+        function showNewCaseModal() {
+            document.getElementById('newCaseModal').style.display = 'flex';
+            addLogEntry('New case modal opened');
+        }
+
+        function hideNewCaseModal() {
+            document.getElementById('newCaseModal').style.display = 'none';
+            document.getElementById('newCaseForm').reset();
+        }
+
+        function handleCreateCase(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const caseData = {
+                title: formData.get('title'),
+                description: formData.get('description'),
+                case_type: formData.get('case_type')
+            };
+
+            showLoading(true);
+            addLogEntry(`Creating case: ${caseData.title}`);
+
+            fetch('/cases', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(caseData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    hideNewCaseModal();
+                    loadCases(); // Reload cases
+                    addLogEntry(`Case created: ${data.case_id}`);
+                    showResult('CASE CREATED', `Case "${caseData.title}" created and activated`, 'success');
+                } else {
+                    addLogEntry(`Error creating case: ${data.error}`);
+                    showResult('ERROR', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                showResult('CONNECTION ERROR', error.toString(), 'error');
+            });
+        }
+
+        function handleCaseSelection(event) {
+            const caseId = event.target.value;
+            if (!caseId) return;
+
+            addLogEntry(`Activating case: ${caseId}`);
+
+            fetch(`/cases/${caseId}/activate`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateActiveCaseDisplay(data.active_case);
+                    addLogEntry(`Case activated: ${caseId}`);
+                } else {
+                    addLogEntry(`Error activating case: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                addLogEntry(`Error activating case: ${error}`);
+            });
+        }
+
+        // Handle metadata extraction
+        function handleMetadataUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            addLogEntry(`File selected for metadata: ${file.name}`);
+            showLoading(true);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/extract_metadata', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    const metadata = data.metadata;
+                    addLogEntry(`Metadata extraction completed: ${file.name}`);
+                    
+                    // Agregar resultado al chat
+                    const basic = metadata.basic || {};
+                    const specific = metadata.specific || {};
+                    
+                    let resultSummary = `📁 **File Metadata Extraction**\n\n` +
+                        `**File:** ${basic.filename || 'Unknown'}\n` +
+                        `**Type:** ${basic.file_type || 'Unknown'} (${basic.extension || 'No ext'})\n` +
+                        `**Size:** ${basic.size_mb || 0} MB\n`;
+                    
+                    if (specific.type === 'video' && !specific.error) {
+                        const video_info = specific.video_info || {};
+                        const format_info = specific.format || {};
+                        resultSummary += `**Resolution:** ${video_info.width || 'Unknown'} x ${video_info.height || 'Unknown'}\n` +
+                            `**Duration:** ${format_info.duration ? Math.round(format_info.duration) + 's' : 'Unknown'}\n` +
+                            `**Codec:** ${video_info.codec || 'Unknown'}\n`;
+                        
+                        if (specific.creation_date) {
+                            resultSummary += `**Created:** ${specific.creation_date}\n`;
+                        }
+                    } else if (specific.type === 'audio' && !specific.error) {
+                        const audio_info = specific.audio_info || {};
+                        const id3_tags = specific.id3_tags || {};
+                        resultSummary += `**Duration:** ${specific.format?.duration ? Math.round(specific.format.duration) + 's' : 'Unknown'}\n` +
+                            `**Codec:** ${audio_info.codec || 'Unknown'}\n`;
+                        
+                        if (id3_tags.title) resultSummary += `**Title:** ${id3_tags.title}\n`;
+                        if (id3_tags.artist) resultSummary += `**Artist:** ${id3_tags.artist}\n`;
+                    }
+                    
+                    addMessageToChat('assistant', resultSummary);
+                    
+                    // También mostrar en interfaz tradicional si no estamos en modo chat
+                    if (currentMode === 'metadata') {
+                        showMetadataResult(metadata, data.filename);
+                    }
+                } else {
+                    addLogEntry(`Metadata extraction error: ${data.error}`);
+                    addMessageToChat('system', `❌ Metadata Extraction Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                showResult('CONNECTION ERROR', error.toString(), 'error');
+            });
+            
+            // Clear file input
+            event.target.value = '';
+        }
+
+        function showMetadataResult(metadata, filename) {
+            const resultsContent = document.getElementById('resultsContent');
+            const basic = metadata.basic || {};
+            const specific = metadata.specific || {};
+            
+            resultsContent.innerHTML = `
+                <div class="processing-results">
+                    <div class="result-header">
+                        <h4>📁 FILE METADATA ANALYSIS</h4>
+                        <span class="result-timestamp">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h5>📄 BASIC INFORMATION:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>Filename:</strong> ${basic.filename || 'Unknown'}</div>
+                            <div class="info-item"><strong>File Type:</strong> ${basic.file_type || 'Unknown'} (${basic.extension || 'No ext'})</div>
+                            <div class="info-item"><strong>Size:</strong> ${basic.size_mb || 0} MB (${basic.size_bytes || 0} bytes)</div>
+                            <div class="info-item"><strong>MIME Type:</strong> ${basic.mime_type || 'Unknown'}</div>
+                            <div class="info-item"><strong>Created:</strong> ${basic.created_time ? basic.created_time.slice(0, 19).replace('T', ' ') : 'Unknown'}</div>
+                            <div class="info-item"><strong>Modified:</strong> ${basic.modified_time ? basic.modified_time.slice(0, 19).replace('T', ' ') : 'Unknown'}</div>
+                        </div>
+                    </div>
+                    
+                    ${specific.type === 'image' && specific.image_info ? `
+                    <div class="result-section">
+                        <h5>🖼️ IMAGE DETAILS:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>Dimensions:</strong> ${specific.image_info.width} x ${specific.image_info.height}</div>
+                            <div class="info-item"><strong>Format:</strong> ${specific.image_info.format}</div>
+                            <div class="info-item"><strong>Color Mode:</strong> ${specific.image_info.mode}</div>
+                            <div class="info-item"><strong>Has Transparency:</strong> ${specific.image_info.has_transparency ? 'Yes' : 'No'}</div>
+                        </div>
+                    </div>` : ''}
+                    
+                    ${specific.type === 'video' && !specific.error ? `
+                    <div class="result-section">
+                        <h5>🎬 VIDEO DETAILS:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>Resolution:</strong> ${specific.video_info?.width || 'Unknown'} x ${specific.video_info?.height || 'Unknown'}</div>
+                            <div class="info-item"><strong>Codec:</strong> ${specific.video_info?.codec || 'Unknown'}</div>
+                            <div class="info-item"><strong>Duration:</strong> ${specific.format?.duration ? Math.round(specific.format.duration) + 's' : 'Unknown'}</div>
+                            <div class="info-item"><strong>Frame Rate:</strong> ${specific.video_info?.frame_rate || 'Unknown'}</div>
+                            <div class="info-item"><strong>Bit Rate:</strong> ${specific.format?.bit_rate ? Math.round(specific.format.bit_rate / 1000) + ' kbps' : 'Unknown'}</div>
+                            <div class="info-item"><strong>Streams:</strong> ${specific.streams_count?.total || 'Unknown'}</div>
+                            ${specific.creation_date ? `<div class="info-item"><strong>Created:</strong> ${specific.creation_date}</div>` : ''}
+                        </div>
+                    </div>` : ''}
+                    
+                    ${specific.type === 'audio' && !specific.error ? `
+                    <div class="result-section">
+                        <h5>🎵 AUDIO DETAILS:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>Codec:</strong> ${specific.audio_info?.codec || 'Unknown'}</div>
+                            <div class="info-item"><strong>Duration:</strong> ${specific.format?.duration ? Math.round(specific.format.duration) + 's' : 'Unknown'}</div>
+                            <div class="info-item"><strong>Sample Rate:</strong> ${specific.audio_info?.sample_rate || 'Unknown'}Hz</div>
+                            <div class="info-item"><strong>Channels:</strong> ${specific.audio_info?.channels || 'Unknown'}</div>
+                            <div class="info-item"><strong>Bit Rate:</strong> ${specific.format?.bit_rate ? Math.round(specific.format.bit_rate / 1000) + ' kbps' : 'Unknown'}</div>
+                            ${specific.id3_tags?.title ? `<div class="info-item"><strong>Title:</strong> ${specific.id3_tags.title}</div>` : ''}
+                            ${specific.id3_tags?.artist ? `<div class="info-item"><strong>Artist:</strong> ${specific.id3_tags.artist}</div>` : ''}
+                            ${specific.id3_tags?.album ? `<div class="info-item"><strong>Album:</strong> ${specific.id3_tags.album}</div>` : ''}
+                        </div>
+                    </div>` : ''}
+                    
+                    ${specific.error ? `
+                    <div class="result-section">
+                        <h5>⚠️ EXTRACTION ERROR:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item" style="color: var(--gold);"><strong>Error:</strong> ${specific.error}</div>
+                            <div class="info-item"><strong>Note:</strong> ${specific.note || 'Unknown error'}</div>
+                        </div>
+                    </div>` : ''}
+                    
+                    ${specific.exif && Object.keys(specific.exif).length > 0 ? `
+                    <div class="result-section">
+                        <h5>📸 EXIF DATA:</h5>
+                        <div class="metadata-info">
+                            ${Object.entries(specific.exif).slice(0, 10).map(([key, value]) => 
+                                `<div class="info-item"><strong>${key}:</strong> ${value}</div>`
+                            ).join('')}
+                            ${Object.keys(specific.exif).length > 10 ? `<div class="info-item"><em>... and ${Object.keys(specific.exif).length - 10} more fields</em></div>` : ''}
+                        </div>
+                    </div>` : ''}
+                    
+                    ${specific.color_palette && specific.color_palette.length > 0 ? `
+                    <div class="result-section">
+                        <h5>🎨 DOMINANT COLORS:</h5>
+                        <div class="color-palette">
+                            ${specific.color_palette.map(colorInfo => 
+                                `<div class="color-sample" style="background-color: ${colorInfo.color};" title="${colorInfo.color} (${colorInfo.frequency} pixels)"></div>`
+                            ).join('')}
+                        </div>
+                    </div>` : ''}
+                    
+                    <div class="result-stats">
+                        <div class="metric">
+                            <span class="metric-label">File Analyzed:</span>
+                            <span class="metric-value">${filename}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Extraction Time:</span>
+                            <span class="metric-value">${metadata.extraction_timestamp ? metadata.extraction_timestamp.slice(11, 19) : 'Unknown'}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Success:</span>
+                            <span class="metric-value">${metadata.success ? 'YES' : 'NO'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Inicializar sistema
+        function initializeSystem() {
+            setMode('chat');
+            loadCases();
+            loadSystemStats();
+            loadChatHistory();
+            addLogEntry('System initialized with Intelligent Chat Mode');
+        }
+
+        function loadChatHistory() {
+            fetch('/chat/history')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.conversation && data.conversation.length > 0) {
+                    // Limpiar welcome message
+                    const chatContainer = document.getElementById('chatContainer');
+                    chatContainer.innerHTML = '';
+                    
+                    // Cargar mensajes existentes
+                    conversation = data.conversation;
+                    data.conversation.forEach(msg => {
+                        addMessageToChat(msg.role, msg.content, msg.metadata || {});
+                    });
+                    
+                    addLogEntry(`Loaded ${data.conversation.length} chat messages`);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading chat history:', error);
+                addLogEntry('Chat history not available');
+            });
+        }
+
+        // Inicializar en modo chat por defecto
+        initializeSystem();
+    </script>
+</body>
+</html> 

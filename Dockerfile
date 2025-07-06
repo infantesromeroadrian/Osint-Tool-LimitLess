@@ -2,7 +2,7 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including FFmpeg for video/audio metadata
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     ca-certificates \
+    ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,40 +22,24 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install basic dependencies first
-RUN pip install --no-cache-dir numpy pandas
+# Install Flask application requirements (includes spaCy model from URL)
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install PyTorch with specific version (smaller) and enhanced retry mechanism
-RUN pip install --no-cache-dir --timeout=300 --retries=10 torch==1.13.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu || \
-    pip install --no-cache-dir --timeout=300 --retries=10 torch==1.13.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu || \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Download NLTK data with simple commands
+RUN python -c "import nltk; nltk.download('punkt', quiet=True)" || echo "Failed to download punkt"
+RUN python -c "import nltk; nltk.download('stopwords', quiet=True)" || echo "Failed to download stopwords"
+RUN python -c "import nltk; nltk.download('wordnet', quiet=True)" || echo "Failed to download wordnet"
+RUN python -c "import nltk; nltk.download('omw-1.4', quiet=True)" || echo "Failed to download omw-1.4"
+RUN python -c "import nltk; nltk.download('vader_lexicon', quiet=True)" || echo "Failed to download vader_lexicon"
 
-# Install OpenAI dependency (using older version that doesn't have proxy issues)
-RUN pip install --no-cache-dir openai==0.28.1
-
-# Install huggingface and transformers dependencies with retry mechanism
-RUN pip install --no-cache-dir --timeout=300 --retries=10 huggingface-hub==0.16.4 transformers==4.30.2 sentence-transformers==2.2.2
-
-# Install remaining requirements with retry mechanism
-RUN pip install --no-cache-dir --timeout=300 --retries=10 -r requirements.txt
-
-# Copy the model download script and run it (will be replaced when we copy the full app)
-COPY download_model.py .
+# Create cache directories for future model downloads
 RUN mkdir -p /root/.cache/torch/sentence_transformers/
-RUN python download_model.py || echo "Model download failed, will use fallback mode"
 
 # Make data directories
 RUN mkdir -p data/chroma_db data/documents data/casos data/image_analysis data/transcriptions
 
-# Create directory for NLTK data
-RUN mkdir -p /app/nltk_data && chmod 777 /app/nltk_data
-
-# Download NLTK data as root (before switching to app user)
-ENV NLTK_DATA=/app/nltk_data
-RUN python -c "import nltk; nltk.download('punkt', download_dir='/app/nltk_data')"
-
-# Install spaCy language model
-RUN python -m spacy download en_core_web_sm
+# Create app directories
+RUN mkdir -p /app/logs
 
 # Copy the rest of the application
 COPY . .
@@ -76,6 +61,14 @@ RUN mkdir -p /home/app/.cache && \
     cp -r /root/.cache/torch /home/app/.cache/ || true && \
     chown -R app:app /home/app/.cache
 
+# Copy NLTK data to app user directory
+RUN mkdir -p /home/app/nltk_data && \
+    cp -r /root/nltk_data/* /home/app/nltk_data/ 2>/dev/null || true && \
+    chown -R app:app /home/app/nltk_data || true
+
+# Set NLTK data path for app user
+ENV NLTK_DATA=/home/app/nltk_data
+
 # Create script to fix permissions on startup
 RUN echo '#!/bin/sh' > /app/fix-permissions.sh && \
     echo '# Fix permissions for mounted volumes on container startup' >> /app/fix-permissions.sh && \
@@ -89,11 +82,10 @@ USER app
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV NLTK_DATA=/app/nltk_data
-ENV SENTENCE_TRANSFORMERS_HOME=/home/app/.cache/torch/sentence_transformers
+ENV FLASK_APP=src/app.py
 
-# Expose Streamlit port
-EXPOSE 8501
+# Expose Flask port
+EXPOSE 5000
 
 # Command to run the application, fixing permissions first
-CMD ["sh", "-c", "/app/fix-permissions.sh && streamlit run src/main.py --server.address=0.0.0.0"] 
+CMD ["sh", "-c", "/app/fix-permissions.sh && python src/app.py"] 

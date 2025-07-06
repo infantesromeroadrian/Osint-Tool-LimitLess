@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: limitless-osint
     ports:
-      - "9000:8501"
+      - "9000:5000"
     volumes:
       - ./data:/app/data
     env_file:
@@ -16,7 +16,7 @@ services:
       - 8.8.8.8  # Google DNS
       - 8.8.4.4  # Google DNS backup
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
       interval: 30s
       timeout: 10s
       retries: 3

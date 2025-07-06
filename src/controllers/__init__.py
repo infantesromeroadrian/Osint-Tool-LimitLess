@@ -1,4 +1,0 @@
-# Controllers package 
-from controllers.transcription_controller import TranscriptionController
-from controllers.image_analysis_controller import ImageAnalysisController
-from controllers.case_controller import CaseController 

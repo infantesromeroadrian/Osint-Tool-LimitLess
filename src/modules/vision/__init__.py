@@ -1,0 +1,1 @@
+# Generic vision analysis module for all types of images 
