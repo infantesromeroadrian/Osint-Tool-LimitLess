@@ -378,7 +378,7 @@
 
         function sendChatMessage(message) {
             // Agregar mensaje del usuario al chat
-            addMessageToChat('user', message);
+            const userMsgId = addMessageToChat('user', message);
             
             // Mostrar indicador de typing
             showTypingIndicator(true);
@@ -418,6 +418,13 @@
                         sources: result.source_documents ? result.source_documents.length : 0
                     });
                     
+                    // ✅ NUEVO: Mostrar sugerencias proactivas
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        setTimeout(() => {
+                            showSuggestions(data.suggestions);
+                        }, 500); // Pequeño delay para mejor UX
+                    }
+                    
                     // Actualizar conversación local
                     conversation = data.conversation || [];
                     
@@ -435,24 +442,39 @@
             });
         }
 
-        function addMessageToChat(role, content, metadata = {}) {
+        function addMessageToChat(role, content, metadata = {}, messageId = null) {
             const chatContainer = document.getElementById('chatContainer');
             const messageDiv = document.createElement('div');
             const isUser = role === 'user';
             const isSystem = role === 'system';
             
-            messageDiv.className = isUser ? 'user-message' : 'assistant-message';
+            // ✅ Generar ID único si no se proporciona
+            const msgId = messageId || generateMessageId();
+            
+            messageDiv.className = `message-wrapper ${isUser ? 'user-message' : 'assistant-message'}`;
+            messageDiv.setAttribute('data-message-id', msgId);
             
             if (isSystem) {
-                messageDiv.className = 'assistant-message';
+                messageDiv.className = 'message-wrapper assistant-message';
             }
             
             const timestamp = new Date().toLocaleTimeString();
             
+            // ✅ Botones de reacción
+            const reactionButtons = !isSystem ? `
+                <div class="add-reactions">
+                    <div class="reaction-emoji" onclick="addReaction('${msgId}', '👍')" title="Me gusta">👍</div>
+                    <div class="reaction-emoji" onclick="addReaction('${msgId}', '❤️')" title="Excelente">❤️</div>
+                    <div class="reaction-emoji" onclick="addReaction('${msgId}', '🔍')" title="Interesante">🔍</div>
+                    <div class="reaction-emoji" onclick="addReaction('${msgId}', '⚠️')" title="Importante">⚠️</div>
+                    <div class="reaction-emoji" onclick="addReaction('${msgId}', '📊')" title="Datos útiles">📊</div>
+                </div>
+            ` : '';
+            
             let messageHTML = `
                 <div class="message-content">
                     ${isSystem ? `<div style="color: var(--gold); font-weight: bold; margin-bottom: 8px;">🤖 System</div>` : ''}
-                    <p>${content.replace(/\n/g, '<br>')}</p>
+                    <p>${content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')}</p>
                     ${metadata.processing_time ? `
                         <div class="source-documents">
                             <h6>📊 Response Metrics:</h6>
@@ -460,6 +482,8 @@
                             <div class="source-item">RAG Sources: ${metadata.sources || 0}</div>
                         </div>
                     ` : ''}
+                    <div class="message-reactions" id="reactions-${msgId}"></div>
+                    ${reactionButtons}
                 </div>
                 <div class="message-time">${timestamp}</div>
             `;
@@ -476,6 +500,145 @@
             
             // Scroll to bottom
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return msgId;
+        }
+
+        function generateMessageId() {
+            return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function addReaction(messageId, reaction) {
+            fetch('/chat/react', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    message_id: messageId, 
+                    reaction: reaction 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateReactionDisplay(messageId, reaction);
+                    addLogEntry(`Reaction added: ${reaction}`);
+                } else {
+                    addLogEntry(`Error adding reaction: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                addLogEntry(`Error: ${error}`);
+            });
+        }
+
+        function updateReactionDisplay(messageId, reaction) {
+            const reactionsContainer = document.getElementById(`reactions-${messageId}`);
+            if (!reactionsContainer) return;
+            
+            // Buscar si ya existe esta reacción
+            let existingReaction = reactionsContainer.querySelector(`.reaction-button[data-reaction="${reaction}"]`);
+            
+            if (existingReaction) {
+                // Incrementar contador
+                const countSpan = existingReaction.querySelector('.reaction-count');
+                const currentCount = parseInt(countSpan.textContent) || 0;
+                countSpan.textContent = currentCount + 1;
+                existingReaction.classList.add('active');
+            } else {
+                // Crear nueva reacción
+                const reactionButton = document.createElement('div');
+                reactionButton.className = 'reaction-button active';
+                reactionButton.setAttribute('data-reaction', reaction);
+                reactionButton.innerHTML = `
+                    <span>${reaction}</span>
+                    <span class="reaction-count">1</span>
+                `;
+                reactionsContainer.appendChild(reactionButton);
+            }
+        }
+
+        function showSuggestions(suggestions) {
+            if (!suggestions || suggestions.length === 0) return;
+            
+            const chatContainer = document.getElementById('chatContainer');
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'suggestions-container';
+            
+            let suggestionsHTML = `
+                <div class="suggestions-header">
+                    <span>💡</span>
+                    <span>Sugerencias inteligentes:</span>
+                </div>
+                <div class="suggestions-list">
+            `;
+            
+            suggestions.forEach(suggestion => {
+                suggestionsHTML += `
+                    <div class="suggestion-item" onclick="executeSuggestion('${suggestion.action}', '${suggestion.text}')">
+                        <div class="suggestion-icon">${suggestion.icon}</div>
+                        <div class="suggestion-text">${suggestion.text}</div>
+                        <div class="suggestion-action">${suggestion.action}</div>
+                    </div>
+                `;
+            });
+            
+            suggestionsHTML += '</div>';
+            suggestionsDiv.innerHTML = suggestionsHTML;
+            
+            chatContainer.appendChild(suggestionsDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function executeSuggestion(action, text) {
+            addLogEntry(`Executing suggestion: ${action}`);
+            
+            switch (action) {
+                case 'geospatial_analysis':
+                    addMessageToChat('user', '🗺️ ' + text);
+                    sendChatMessage('Analiza la información geoespacial y de ubicación que tenemos');
+                    break;
+                case 'image_analysis':
+                    setMode('image');
+                    addLogEntry('Switched to image analysis mode');
+                    break;
+                case 'metadata_extraction':
+                    setMode('metadata');
+                    addLogEntry('Switched to metadata extraction mode');
+                    break;
+                case 'person_profile':
+                    addMessageToChat('user', '👤 ' + text);
+                    sendChatMessage('Crea un perfil detallado basado en la información de la persona mencionada');
+                    break;
+                case 'similar_search':
+                    addMessageToChat('user', '🔍 ' + text);
+                    sendChatMessage('Busca imágenes o análisis similares en este caso');
+                    break;
+                case 'ocr_analysis':
+                    addMessageToChat('user', '📝 ' + text);
+                    sendChatMessage('Extrae y analiza el texto visible en las imágenes analizadas');
+                    break;
+                case 'metadata_comparison':
+                    addMessageToChat('user', '🔗 ' + text);
+                    sendChatMessage('Compara los metadatos extraídos con otros archivos del caso');
+                    break;
+                case 'timeline_creation':
+                    addMessageToChat('user', '🕰️ ' + text);
+                    sendChatMessage('Crea una línea de tiempo basada en los metadatos temporales disponibles');
+                    break;
+                case 'conversation_summary':
+                    addMessageToChat('user', '📊 ' + text);
+                    sendChatMessage('Proporciona un resumen completo de nuestra conversación hasta ahora');
+                    break;
+                default:
+                    addMessageToChat('user', text);
+                    break;
+            }
+            
+            // Remover sugerencias después de ejecutar
+            const suggestionsContainer = document.querySelector('.suggestions-container');
+            if (suggestionsContainer) {
+                suggestionsContainer.remove();
+            }
         }
 
         function showTypingIndicator(show) {
@@ -1145,7 +1308,18 @@
                     // Cargar mensajes existentes
                     conversation = data.conversation;
                     data.conversation.forEach(msg => {
-                        addMessageToChat(msg.role, msg.content, msg.metadata || {});
+                        const msgId = addMessageToChat(msg.role, msg.content, msg.metadata || {}, msg.message_id);
+                        
+                        // ✅ Cargar reacciones existentes
+                        if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+                            setTimeout(() => {
+                                Object.entries(msg.reactions).forEach(([reaction, count]) => {
+                                    for (let i = 0; i < count; i++) {
+                                        updateReactionDisplay(msgId, reaction);
+                                    }
+                                });
+                            }, 100);
+                        }
                     });
                     
                     addLogEntry(`Loaded ${data.conversation.length} chat messages`);

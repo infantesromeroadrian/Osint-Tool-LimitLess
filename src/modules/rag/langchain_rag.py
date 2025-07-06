@@ -38,9 +38,8 @@ class LangChainRAG:
                 raise ValueError("OPENAI_API_KEY requerida")
             
             # Configurar embeddings (nueva sintaxis)
-            self.embeddings = OpenAIEmbeddings(
-                openai_api_key=settings.OPENAI_API_KEY
-            )
+            os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+            self.embeddings = OpenAIEmbeddings()
             
             # Configurar text splitter
             self.text_splitter = RecursiveCharacterTextSplitter(
@@ -51,7 +50,6 @@ class LangChainRAG:
             
             # Configurar LLM (nueva sintaxis ChatOpenAI)
             self.llm = ChatOpenAI(
-                openai_api_key=settings.OPENAI_API_KEY,
                 model=settings.OPENAI_MODEL,
                 temperature=0.3
             )
@@ -115,7 +113,7 @@ class LangChainRAG:
             logger.error(f"❌ Error creando QA chain: {e}")
             raise
 
-    def add_documents(self, texts: List[str], metadatas: List[Dict] = None) -> bool:
+    def add_documents(self, texts: List[str], metadatas: Optional[List[Dict]] = None) -> bool:
         """Agregar documentos al vector store"""
         try:
             if not texts:
@@ -136,7 +134,8 @@ class LangChainRAG:
             chunks = self.text_splitter.split_documents(documents)
             
             # Agregar al vector store
-            self.vector_store.add_documents(chunks)
+            if self.vector_store is not None:
+                self.vector_store.add_documents(chunks)
             
             logger.info(f"📄 {len(chunks)} chunks agregados al vector store")
             return True
