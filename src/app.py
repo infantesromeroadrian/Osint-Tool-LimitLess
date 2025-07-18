@@ -33,6 +33,7 @@ from src.modules.vision.image_analyzer import image_analyzer
 from src.modules.cases.case_manager import case_manager
 from src.modules.metadata.extractor import modular_extractor as metadata_extractor
 from src.modules.conversation_manager import conversation_manager
+from src.modules.transcription.transcriber import get_audio_transcriber
 
 def create_app():
     """Crear aplicación Flask simplificada"""
@@ -245,6 +246,180 @@ def create_app():
                     
         except Exception as e:
             logger.error(f"❌ Error extrayendo metadatos: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+    
+    @app.route('/transcribe', methods=['POST'])
+    def transcribe_audio():
+        """Transcripción de audio y procesamiento RAG"""
+        try:
+            if 'audio' not in request.files:
+                return jsonify({"success": False, "error": "No se encontró archivo de audio"}), 400
+            
+            file = request.files['audio']
+            if file.filename == '':
+                return jsonify({"success": False, "error": "No se seleccionó archivo"}), 400
+            
+            session_id = get_session_id()
+            case_id = case_manager.get_active_case(session_id)
+            
+            # Parámetros de transcripción
+            model_size = request.form.get('model_size', 'base')
+            language = request.form.get('language', None)
+            initial_prompt = request.form.get('initial_prompt', None)
+            vad_filter = request.form.get('vad_filter', 'true').lower() == 'true'
+            word_timestamps = request.form.get('word_timestamps', 'false').lower() == 'true'
+            beam_size = int(request.form.get('beam_size', 5))
+            
+            # Validar modelo
+            transcriber = get_audio_transcriber()
+            available_models = transcriber.get_available_models()
+            if model_size not in available_models:
+                return jsonify({
+                    "success": False, 
+                    "error": f"Modelo no válido. Disponibles: {available_models}"
+                }), 400
+            
+            logger.info(f"🎵 Iniciando transcripción con modelo {model_size}")
+            
+            # Leer bytes del archivo
+            audio_bytes = file.read()
+            filename = secure_filename(file.filename)
+            
+            # Transcribir audio
+            result = transcriber.transcribe_bytes(
+                audio_bytes=audio_bytes,
+                filename=filename,
+                model_size=model_size,
+                language=language,
+                initial_prompt=initial_prompt,
+                vad_filter=vad_filter,
+                word_timestamps=word_timestamps,
+                beam_size=beam_size
+            )
+            
+            if result["success"]:
+                transcript = result["transcript"]
+                
+                # Procesar con RAG si hay transcripción
+                if transcript.strip():
+                    # Contexto del caso
+                    case_context = ""
+                    if case_id:
+                        case_data = case_manager.get_case_metadata(case_id)
+                        if case_data:
+                            case_context = f"Caso: {case_data.get('title', case_id)}"
+                    
+                    # Guardar en caso si está activo
+                    if case_id:
+                        case_manager.save_analysis_result(case_id, "audio_transcription", result)
+                        
+                        # Agregar al RAG
+                        rag_metadata = {
+                            "case_id": case_id,
+                            "analysis_type": "audio_transcription",
+                            "timestamp": datetime.now().isoformat(),
+                            "file_name": filename,
+                            "language": result["metadata"].get("language"),
+                            "duration": result["metadata"].get("duration"),
+                            "model_size": model_size
+                        }
+                        
+                        # Agregar transcripción al RAG
+                        get_rag_system().add_documents([transcript], [rag_metadata])
+                        logger.info(f"✅ Transcripción agregada al RAG")
+                        
+                        # Agregar mensaje a la conversación
+                        conversation_manager.add_message(
+                            session_id, 
+                            "system", 
+                            f"📝 Audio transcrito: {filename}",
+                            metadata={
+                                "type": "transcription",
+                                "language": result["metadata"].get("language"),
+                                "duration": result["metadata"].get("duration"),
+                                "case_id": case_id
+                            }
+                        )
+                
+                return jsonify({
+                    "success": True,
+                    "case_id": case_id,
+                    "transcription": result,
+                    "filename": filename,
+                    "added_to_rag": transcript.strip() != ""
+                })
+                
+            else:
+                return jsonify(result), 500
+                
+        except Exception as e:
+            logger.error(f"❌ Error en transcripción: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+    
+    @app.route('/transcribe/info', methods=['GET'])
+    def transcribe_info():
+        """Información sobre el sistema de transcripción"""
+        try:
+            transcriber = get_audio_transcriber()
+            system_info = transcriber.get_system_info()
+            return jsonify({
+                "success": True,
+                "system_info": system_info
+            })
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo info de transcripción: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+    
+    @app.route('/process_text', methods=['POST'])
+    def process_text():
+        """Procesar texto y añadir al sistema RAG"""
+        try:
+            data = request.get_json()
+            text = data.get('text', '').strip()
+            
+            if not text:
+                return jsonify({"success": False, "error": "Texto requerido"}), 400
+            
+            session_id = get_session_id()
+            case_id = case_manager.get_active_case(session_id)
+            
+            # Preparar metadata
+            rag_metadata = {
+                "timestamp": datetime.now().isoformat(),
+                "source": "manual_input",
+                "session_id": session_id
+            }
+            
+            # Añadir caso si está activo
+            if case_id:
+                case_data = case_manager.get_case_metadata(case_id)
+                rag_metadata["case_id"] = case_id
+                if case_data:
+                    rag_metadata["case_title"] = case_data.get('title', case_id)
+                
+                # Guardar en caso
+                case_manager.save_analysis_result(case_id, "manual_text_input", {
+                    "text": text,
+                    "timestamp": datetime.now().isoformat(),
+                    "source": "manual_input"
+                })
+            
+            # Agregar al RAG
+            success = get_rag_system().add_documents([text], [rag_metadata])
+            
+            if success:
+                logger.info(f"✅ Texto agregado al RAG: {text[:100]}...")
+                return jsonify({
+                    "success": True,
+                    "message": "Texto agregado al sistema RAG",
+                    "case_id": case_id,
+                    "text_length": len(text)
+                })
+            else:
+                return jsonify({"success": False, "error": "Error agregando texto al RAG"}), 500
+                
+        except Exception as e:
+            logger.error(f"❌ Error procesando texto: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
     
     # ==================== RUTAS DE CASOS ====================

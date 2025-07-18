@@ -76,7 +76,10 @@
                     <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
                     
                     <!-- Hidden file input for metadata extraction -->
-                    <input type="file" id="metadataFileInput" accept="*/*" style="display: none;">
+<input type="file" id="metadataFileInput" accept="*/*" style="display: none;">
+
+<!-- Hidden file input for audio transcription -->
+<input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
                     
                     <!-- Image Analysis Type Selector -->
                     <div class="analysis-type-selector" id="analysisTypeSelector" style="display: none;">
@@ -108,6 +111,10 @@
                     <button class="action-btn" id="metadataBtn">
                         <i class="fas fa-file-search"></i>
                         <span>EXTRACT METADATA</span>
+                    </button>
+                    <button class="action-btn" id="transcribeBtn">
+                        <i class="fas fa-microphone"></i>
+                        <span>TRANSCRIBE AUDIO</span>
                     </button>
                     <button class="action-btn" id="clearChatBtn">
                         <i class="fas fa-broom"></i>
@@ -262,6 +269,7 @@
         document.getElementById('chatBtn').addEventListener('click', () => setMode('chat'));
         document.getElementById('imageBtn').addEventListener('click', () => setMode('image'));
         document.getElementById('metadataBtn').addEventListener('click', () => setMode('metadata'));
+        document.getElementById('transcribeBtn').addEventListener('click', () => setMode('transcribe'));
         document.getElementById('clearChatBtn').addEventListener('click', clearChatHistory);
         document.getElementById('statsBtn').addEventListener('click', showStats);
         document.getElementById('clearResults').addEventListener('click', clearChatHistory);
@@ -271,6 +279,9 @@
         
         // Event listener for metadata file input
         document.getElementById('metadataFileInput').addEventListener('change', handleMetadataUpload);
+        
+        // Event listener for audio file input
+        document.getElementById('audioFileInput').addEventListener('change', handleAudioUpload);
         
         // Case management event listeners
         document.getElementById('newCaseBtn').addEventListener('click', showNewCaseModal);
@@ -313,6 +324,11 @@
                 executeBtn.innerHTML = '<i class="fas fa-file-search"></i> EXTRACT METADATA';
                 document.getElementById('metadataBtn').classList.add('active');
                 addLogEntry('Mode: METADATA EXTRACTION');
+            } else if (mode === 'transcribe') {
+                input.placeholder = 'Click TRANSCRIBE AUDIO to select audio file for transcription...';
+                executeBtn.innerHTML = '<i class="fas fa-microphone"></i> TRANSCRIBE AUDIO';
+                document.getElementById('transcribeBtn').classList.add('active');
+                addLogEntry('Mode: AUDIO TRANSCRIPTION');
             }
         }
 
@@ -326,6 +342,12 @@
             if (currentMode === 'metadata') {
                 // Trigger file input for metadata extraction
                 document.getElementById('metadataFileInput').click();
+                return;
+            }
+            
+            if (currentMode === 'transcribe') {
+                // Trigger file input for audio transcription
+                document.getElementById('audioFileInput').click();
                 return;
             }
             
@@ -1173,6 +1195,129 @@
             
             // Clear file input
             event.target.value = '';
+        }
+
+        // Handle audio transcription
+        function handleAudioUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            addLogEntry(`File selected for transcription: ${file.name}`);
+            showLoading(true);
+            
+            const formData = new FormData();
+            formData.append('audio', file);
+            
+            // Add optional parameters
+            formData.append('model_size', 'base');
+            formData.append('vad_filter', 'true');
+            formData.append('beam_size', '5');
+            
+            addMessageToChat('system', `🎵 Transcribing audio: ${file.name}`);
+            
+            fetch('/transcribe', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    const transcription = data.transcription;
+                    const metadata = transcription.metadata;
+                    addLogEntry(`Audio transcription completed: ${file.name}`);
+                    
+                    // Agregar resultado al chat
+                    let resultSummary = `🎵 **Audio Transcription**\n\n` +
+                        `**File:** ${file.name}\n`;
+                    
+                    if (transcription.transcript) {
+                        resultSummary += `**Transcript:**\n${transcription.transcript}\n\n`;
+                    }
+                    
+                    if (metadata) {
+                        resultSummary += `**Metadata:**\n` +
+                            `- Language: ${metadata.language || 'Unknown'} (${(metadata.language_probability * 100).toFixed(1)}%)\n` +
+                            `- Duration: ${metadata.duration ? metadata.duration.toFixed(2) + 's' : 'Unknown'}\n` +
+                            `- Model: ${metadata.model_size || 'Unknown'}\n` +
+                            `- Device: ${metadata.device || 'Unknown'}\n` +
+                            `- Processing Time: ${metadata.processing_time ? metadata.processing_time.toFixed(2) + 's' : 'Unknown'}\n\n`;
+                    }
+                    
+                    if (data.case_id) {
+                        resultSummary += `**Case ID:** ${data.case_id}\n`;
+                    }
+                    
+                    if (data.added_to_rag) {
+                        resultSummary += `**✅ Added to RAG System**\n`;
+                    }
+                    
+                    addMessageToChat('assistant', resultSummary);
+                    
+                    // También mostrar en interfaz tradicional si no estamos en modo transcribe
+                    if (currentMode === 'transcribe') {
+                        showTranscriptionResult(transcription, file.name);
+                    }
+                } else {
+                    addLogEntry(`Audio transcription error: ${data.error}`);
+                    addMessageToChat('system', `❌ Audio Transcription Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                addLogEntry(`Connection error: ${error}`);
+                showResult('CONNECTION ERROR', error.toString(), 'error');
+            });
+            
+            // Clear file input
+            event.target.value = '';
+        }
+
+        function showTranscriptionResult(transcription, filename) {
+            const resultsContent = document.getElementById('resultsContent');
+            const metadata = transcription.metadata || {};
+            
+            resultsContent.innerHTML = `
+                <div class="processing-results">
+                    <div class="result-header">
+                        <h4>🎵 AUDIO TRANSCRIPTION</h4>
+                        <span class="result-timestamp">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h5>📄 BASIC INFORMATION:</h5>
+                        <div class="metadata-info">
+                            <div class="info-item"><strong>Filename:</strong> ${filename}</div>
+                            <div class="info-item"><strong>Language:</strong> ${metadata.language || 'Unknown'} (${(metadata.language_probability * 100).toFixed(1)}%)</div>
+                            <div class="info-item"><strong>Duration:</strong> ${metadata.duration ? metadata.duration.toFixed(2) + 's' : 'Unknown'}</div>
+                            <div class="info-item"><strong>Model:</strong> ${metadata.model_size || 'Unknown'}</div>
+                            <div class="info-item"><strong>Device:</strong> ${metadata.device || 'Unknown'}</div>
+                            <div class="info-item"><strong>Processing Time:</strong> ${metadata.processing_time ? metadata.processing_time.toFixed(2) + 's' : 'Unknown'}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h5>📝 TRANSCRIPT:</h5>
+                        <div class="transcript-content">
+                            ${transcription.transcript || 'No transcript available'}
+                        </div>
+                    </div>
+                    
+                    ${transcription.segments && transcription.segments.length > 0 ? `
+                    <div class="result-section">
+                        <h5>⏱️ SEGMENTS:</h5>
+                        <div class="segments-container">
+                            ${transcription.segments.map(segment => `
+                                <div class="segment-item">
+                                    <span class="segment-time">[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]</span>
+                                    <span class="segment-text">${segment.text}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
         }
 
         function showMetadataResult(metadata, filename) {
