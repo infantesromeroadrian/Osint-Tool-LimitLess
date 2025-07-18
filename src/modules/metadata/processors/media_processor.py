@@ -5,7 +5,7 @@ Procesador especializado para videos y audios usando FFmpeg
 
 import subprocess
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 from ..base_processor import BaseMetadataProcessor
 
@@ -197,7 +197,7 @@ class MediaMetadataProcessor(BaseMetadataProcessor):
             "nb_programs": format_info.get("nb_programs")
         }
     
-    def _extract_creation_date(self, tags: Dict[str, Any]) -> str:
+    def _extract_creation_date(self, tags: Dict[str, Any]) -> Optional[str]:
         """Extraer fecha de creación de los tags"""
         return tags.get("creation_time") or tags.get("date") or None
     

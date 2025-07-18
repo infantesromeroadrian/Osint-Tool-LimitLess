@@ -10,6 +10,7 @@ langchain==0.2.16
 langchain-openai==0.1.25
 langchain-community==0.2.16
 langchain-chroma==0.1.4
+langchain-text-splitters==0.2.4
 
 # OpenAI (Updated for compatibility)
 openai==1.54.4

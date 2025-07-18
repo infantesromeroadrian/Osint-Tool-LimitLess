@@ -1,6 +1,6 @@
 """
-LangChain RAG System - Implementación oficial con LangChain 0.2.x
-Siguiendo documentación oficial actualizada
+LangChain RAG System - Implementación moderna con LangChain 0.2.x
+Siguiendo documentación oficial actualizada y mejores prácticas
 """
 
 import os
@@ -12,12 +12,16 @@ from datetime import datetime
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY"] = "False"
 
-# LangChain 0.2.x imports (nueva API)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+# LangChain 0.2.x imports modernos
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_chroma import Chroma
-from langchain.chains import RetrievalQA
-from langchain.schema import Document
+# TODO: Cambiar a langchain_chroma cuando esté disponible
+from langchain_community.vectorstores import Chroma
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 # Configuración
 from src.config.settings import settings
@@ -26,12 +30,15 @@ logger = logging.getLogger(__name__)
 
 class LangChainRAG:
     """
-    Sistema RAG usando LangChain 0.2.x oficial
-    Implementación actualizada siguiendo docs oficiales
+    Sistema RAG usando LangChain 0.2.x con API moderna
+    Implementación actualizada siguiendo mejores prácticas oficiales:
+    - Usa create_retrieval_chain y create_stuff_documents_chain
+    - Maneja errores con sistema fallback
+    - Implementa lazy loading para mejor rendimiento
     """
     
     def __init__(self):
-        """Inicializar sistema RAG con LangChain 0.2.x"""
+        """Inicializar sistema RAG con LangChain 0.2.x API moderna"""
         try:
             # Validar API key
             if not settings.OPENAI_API_KEY:
@@ -62,7 +69,7 @@ class LangChainRAG:
             self.qa_chain = None
             self._create_qa_chain()
             
-            logger.info("✅ LangChain RAG 0.2.x inicializado correctamente")
+            logger.info("✅ LangChain RAG 0.2.x inicializado correctamente con API moderna")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando LangChain RAG: {e}")
@@ -80,16 +87,21 @@ class LangChainRAG:
                 persist_directory=settings.CHROMA_DB_PATH
             )
             
+            # Verificar que el vector store se inicializó correctamente
+            if self.vector_store is None:
+                raise ValueError("Vector store no se pudo inicializar")
+            
             logger.info(f"📊 Vector store inicializado: {settings.CHROMA_DB_PATH}")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando vector store: {e}")
+            self.vector_store = None
             raise
 
     def _create_qa_chain(self):
-        """Crear cadena de Q&A con retrieval"""
+        """Crear cadena de Q&A con retrieval usando la API moderna"""
         try:
-            if not self.vector_store:
+            if self.vector_store is None:
                 raise ValueError("Vector store no inicializado")
             
             # Crear retriever
@@ -99,15 +111,38 @@ class LangChainRAG:
                 }
             )
             
-            # Crear chain de Q&A (nueva sintaxis)
-            self.qa_chain = RetrievalQA.from_chain_type(
-                llm=self.llm,
-                chain_type="stuff",
-                retriever=retriever,
-                return_source_documents=True
+            # Crear prompt para RAG
+            system_prompt = (
+                "You are an assistant for question-answering tasks. "
+                "Use the following pieces of retrieved context to answer "
+                "the question. If you don't know the answer, say that you "
+                "don't know. Use three sentences maximum and keep the "
+                "answer concise."
+                "\n\n"
+                "{context}"
             )
             
-            logger.info("🔗 QA Chain creada correctamente")
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system_prompt),
+                    ("human", "{input}"),
+                ]
+            )
+            
+            # Crear chain de documentos
+            question_answer_chain = create_stuff_documents_chain(
+                self.llm, 
+                prompt,
+                output_parser=StrOutputParser()
+            )
+            
+            # Crear chain de retrieval completa
+            self.qa_chain = create_retrieval_chain(
+                retriever, 
+                question_answer_chain
+            )
+            
+            logger.info("🔗 QA Chain creada correctamente con API moderna")
             
         except Exception as e:
             logger.error(f"❌ Error creando QA chain: {e}")
@@ -145,7 +180,7 @@ class LangChainRAG:
             return False
 
     def query(self, question: str) -> Dict[str, Any]:
-        """Ejecutar consulta RAG"""
+        """Ejecutar consulta RAG usando la API moderna"""
         start_time = datetime.now()
         
         try:
@@ -154,12 +189,12 @@ class LangChainRAG:
             
             logger.info(f"🔍 Ejecutando consulta: {question}")
             
-            # Ejecutar consulta (nueva sintaxis)
-            result = self.qa_chain.invoke({"query": question})
+            # Ejecutar consulta (API moderna)
+            result = self.qa_chain.invoke({"input": question})
             
-            # Extraer información
-            answer = result.get("result", "No se pudo generar respuesta")
-            source_docs = result.get("source_documents", [])
+            # Extraer información con nueva estructura
+            answer = result.get("answer", "No se pudo generar respuesta")
+            source_docs = result.get("context", [])
             
             # Calcular tiempo
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -208,12 +243,51 @@ class LangChainRAG:
                 "top_k": settings.TOP_K_RESULTS,
                 "similarity_threshold": settings.SIMILARITY_THRESHOLD,
                 "chroma_path": settings.CHROMA_DB_PATH,
-                "langchain_version": "0.2.x"
+                "langchain_version": "0.2.x (API moderna)",
+                "chain_type": "create_retrieval_chain"
             }
             
         except Exception as e:
             logger.error(f"❌ Error obteniendo estadísticas: {e}")
             return {"error": str(e)}
 
-# Instancia global
-rag_system = LangChainRAG() 
+# Instancia global (lazy loading)
+rag_system = None
+
+def get_rag_system():
+    """Obtener instancia del sistema RAG con lazy loading"""
+    global rag_system
+    if rag_system is None:
+        try:
+            rag_system = LangChainRAG()
+        except Exception as e:
+            logger.error(f"❌ Error inicializando sistema RAG: {e}")
+            # Crear un sistema RAG dummy para que la aplicación funcione
+            rag_system = DummyRAG()
+    return rag_system
+
+class DummyRAG:
+    """Sistema RAG dummy para cuando hay problemas de inicialización"""
+    
+    def query(self, question: str) -> Dict[str, Any]:
+        """Respuesta dummy"""
+        return {
+            "question": question,
+            "answer": "Sistema RAG no disponible. Verifica la configuración de OpenAI API Key.",
+            "source_documents": [],
+            "processing_time": 0.0,
+            "error": True
+        }
+    
+    def add_documents(self, texts: List[str], metadatas: Optional[List[Dict]] = None) -> bool:
+        """Método dummy para agregar documentos"""
+        logger.warning("⚠️ Sistema RAG no disponible - documentos no agregados")
+        return False
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Estadísticas dummy"""
+        return {
+            "vector_store_status": "no disponible",
+            "qa_chain_status": "no disponible",
+            "error": "Sistema RAG no inicializado"
+        } 

@@ -54,7 +54,7 @@ def get_file_category(extension: str) -> str:
     
     return "unknown"
 
-def format_file_size(size_bytes: int) -> str:
+def format_file_size(size_bytes: float) -> str:
     """
     Formatear tamaño de archivo en formato legible
     """

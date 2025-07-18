@@ -79,7 +79,7 @@ class GenericImageAnalyzer:
                 temperature=0.1
             )
             
-            analysis = response.choices[0].message.content
+            analysis = response.choices[0].message.content or "No analysis available"
             processing_time = (datetime.now() - start_time).total_seconds()
             
             # Extraer elementos específicos según el tipo
@@ -141,19 +141,41 @@ class GenericImageAnalyzer:
             """,
             
             "person": """
-            ANALIZA ESTA IMAGEN DE PERSONA CON DETALLE FORENSE:
+            ANALIZA ESTA PERSONA CON PRECISIÓN FORENSE INVESTIGATIVA:
             
-            🎯 OBJETIVOS:
-            1. Descripción física detallada
-            2. Vestimenta y accesorios
-            3. Contexto y ubicación
-            4. Elementos identificativos
+            🎯 DESCRIPCIÓN FÍSICA DETALLADA:
+            - EDAD aproximada y GÉNERO aparente
+            - ALTURA estimada y CONSTITUCIÓN física
+            - COLOR de cabello, TIPO/ESTILO de peinado
+            - COLOR de ojos (si visible)
+            - CARACTERÍSTICAS faciales distintivas
+            - MARCAS, cicatrices, tatuajes visibles
+            - ETNIA/RAZA aparente
             
-            📋 ANÁLISIS:
-            - Características físicas observables
-            - Ropa, accesorios, objetos portados
-            - Postura, gestos, actividades
-            - Elementos del entorno
+            👕 VESTIMENTA Y ACCESORIOS:
+            - ROPA: tipo, color, estilo, marcas visibles
+            - CALZADO: tipo, color, marca si visible
+            - ACCESORIOS: joyas, relojes, gafas, gorras
+            - OBJETOS portados: bolsos, mochilas, dispositivos
+            
+            📍 CONTEXTO Y COMPORTAMIENTO:
+            - POSTURA corporal y lenguaje corporal
+            - ACTIVIDAD que está realizando
+            - UBICACIÓN y entorno visible
+            - INTERACCIONES con otras personas u objetos
+            
+            🔍 ELEMENTOS IDENTIFICATIVOS:
+            - CREDENCIALES o identificaciones visibles
+            - UNIFORMES o ropa de trabajo
+            - VEHÍCULOS asociados
+            - SEÑALES de profesión u ocupación
+            
+            ⚠️ ASPECTOS DE SEGURIDAD:
+            - Posibles ARMAS o objetos sospechosos
+            - Comportamiento inusual o sospechoso
+            - Elementos que sugieran actividad ilegal
+            
+            Proporciona análisis SISTEMÁTICO y DETALLADO para identificación forense.
             """,
             
             "vehicle": """
@@ -254,13 +276,23 @@ class GenericImageAnalyzer:
         }
 
     def _extract_person_info(self, analysis: str) -> Dict[str, Any]:
-        """Extraer información específica de personas"""
+        """Extraer información específica de personas con detalle forense"""
         return {
-            "physical_description": self._extract_field(analysis, ["físico", "physical", "altura", "height"]),
-            "clothing": self._extract_field(analysis, ["vestimenta", "ropa", "clothing", "shirt"]),
-            "accessories": self._extract_field(analysis, ["accesorios", "accessories", "gafas", "glasses"]),
-            "activity": self._extract_field(analysis, ["actividad", "activity", "acción", "action"]),
-            "location": self._extract_field(analysis, ["ubicación", "location", "lugar", "place"])
+            "age_gender": self._extract_field(analysis, ["edad", "age", "género", "gender", "años", "masculino", "femenino"]),
+            "height_build": self._extract_field(analysis, ["altura", "height", "constitución", "build", "complexión", "delgado", "robusto"]),
+            "hair": self._extract_field(analysis, ["cabello", "hair", "pelo", "peinado", "calvo", "rubio", "moreno"]),
+            "facial_features": self._extract_field(analysis, ["facial", "cara", "ojos", "eyes", "nariz", "boca", "barba", "bigote"]),
+            "distinctive_marks": self._extract_field(analysis, ["marca", "cicatriz", "tatuaje", "tattoo", "lunar", "scar"]),
+            "clothing_upper": self._extract_field(analysis, ["camisa", "shirt", "camiseta", "chaqueta", "jacket", "suéter"]),
+            "clothing_lower": self._extract_field(analysis, ["pantalón", "pants", "falda", "shorts", "jeans", "trousers"]),
+            "footwear": self._extract_field(analysis, ["calzado", "zapatos", "shoes", "botas", "boots", "tenis", "sneakers"]),
+            "accessories": self._extract_field(analysis, ["accesorios", "accessories", "gafas", "glasses", "reloj", "watch", "gorra", "hat"]),
+            "carried_objects": self._extract_field(analysis, ["bolso", "bag", "mochila", "backpack", "dispositivo", "teléfono", "phone"]),
+            "body_language": self._extract_field(analysis, ["postura", "posture", "lenguaje corporal", "body language", "gestos"]),
+            "activity": self._extract_field(analysis, ["actividad", "activity", "acción", "action", "haciendo", "doing"]),
+            "location_context": self._extract_field(analysis, ["ubicación", "location", "lugar", "place", "entorno", "environment"]),
+            "identifiers": self._extract_field(analysis, ["credencial", "identificación", "uniform", "uniforme", "trabajo", "work"]),
+            "security_concerns": self._extract_field(analysis, ["arma", "weapon", "sospechoso", "suspicious", "peligroso", "dangerous"])
         }
 
     def _extract_document_info(self, analysis: str) -> Dict[str, Any]:

@@ -46,7 +46,7 @@ class BaseMetadataProcessor(ABC):
         """
         pass
     
-    def get_error_response(self, error: str, note: str = None) -> Dict[str, Any]:
+    def get_error_response(self, error: str, note: Optional[str] = None) -> Dict[str, Any]:
         """
         Generar respuesta de error estandarizada
         
