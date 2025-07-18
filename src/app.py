@@ -59,67 +59,53 @@ def create_app():
     
     @app.route('/chat', methods=['POST'])
     def chat():
-        """Chat conversacional simplificado"""
+        """Endpoint para consultas con sistema RAG conversacional"""
         try:
             data = request.get_json()
-            message = data.get('message', '').strip()
             
-            if not message:
-                return jsonify({"success": False, "error": "Mensaje requerido"}), 400
+            if not data:
+                logger.error("❌ No se recibieron datos JSON")
+                return jsonify({"error": "No se recibieron datos"}), 400
+                
+            query = data.get('query', '').strip()
             
+            if not query:
+                logger.error("❌ Query vacío o no encontrado")
+                return jsonify({"error": "Query es requerido"}), 400
+            
+            # Obtener sesión actual desde el case manager
             session_id = get_session_id()
-            case_id = case_manager.get_active_case(session_id)
             
-            # Agregar mensaje del usuario
-            conversation_manager.add_message(session_id, "user", message)
+            # Obtener caso activo para usar como session_id conversacional
+            active_case_id = case_manager.get_active_case(session_id)
             
-            # Obtener contexto
-            conversation_context = conversation_manager.get_conversation_context(session_id, max_messages=8)
+            # Usar ID del caso activo como session_id para memoria conversacional
+            conversation_session_id = active_case_id if active_case_id else 'default'
             
-            # Contexto del caso
-            case_context = ""
-            if case_id:
-                case_data = case_manager.get_case_metadata(case_id)
-                if case_data:
-                    case_context = f"Caso activo: {case_data.get('title', case_id)}"
+            # Obtener sistema RAG
+            rag_system = get_rag_system()
             
-            # Crear pregunta enriquecida
-            enriched_question = message
-            if conversation_context:
-                enriched_question = f"Contexto: {conversation_context}\n\nPregunta: {message}"
+            # Consultar sistema RAG conversacional
+            response = rag_system.query(query, conversation_session_id)
             
-            # Ejecutar consulta RAG
-            result = get_rag_system().query(enriched_question)
+            # Verificar que la respuesta es válida
+            if not response or not isinstance(response, dict):
+                logger.error("❌ Respuesta RAG inválida")
+                return jsonify({"error": "Error interno del sistema RAG"}), 500
             
-            # Agregar respuesta
-            conversation_manager.add_message(
-                session_id, 
-                "assistant", 
-                result["answer"],
-                metadata={
-                    "rag_sources": len(result.get("source_documents", [])),
-                    "processing_time": result.get("processing_time"),
-                    "case_id": case_id
-                }
-            )
+            # Verificar que tiene el campo answer
+            if 'answer' not in response:
+                logger.error("❌ Respuesta RAG sin campo 'answer'")
+                return jsonify({"error": "Respuesta RAG incompleta"}), 500
             
-            # Obtener conversación completa
-            full_conversation = conversation_manager.get_conversation(session_id)
+            logger.info(f"📊 Sesión conversacional: {conversation_session_id}")
+            logger.info(f"📊 Historial: {response.get('conversation_length', 0)} mensajes")
             
-            # Generar sugerencias
-            suggestions = conversation_manager.generate_suggestions(session_id, result["answer"])
-            
-            return jsonify({
-                "success": True,
-                "result": result,
-                "conversation": full_conversation,
-                "case_context": case_context,
-                "suggestions": suggestions
-            })
+            return jsonify(response)
             
         except Exception as e:
-            logger.error(f"❌ Error en chat: {e}")
-            return jsonify({"success": False, "error": str(e)}), 500
+            logger.error(f"❌ Error en chat conversacional: {e}")
+            return jsonify({"error": str(e)}), 500
     
     @app.route('/analyze_image', methods=['POST'])
     def analyze_image():

@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Load JavaScript files -->
+    <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 </head>
 <body>
     <!-- Background Grid -->
@@ -120,6 +123,14 @@
                         <i class="fas fa-broom"></i>
                         <span>CLEAR CHAT</span>
                     </button>
+                    <button class="action-btn" onclick="testRAGSystem()">
+                        <i class="fas fa-flask"></i>
+                        <span>TEST RAG</span>
+                    </button>
+                    <button class="action-btn" onclick="ultraSimpleTest()" style="background: #ff4444;">
+                        <i class="fas fa-bug"></i>
+                        <span>ULTRA TEST</span>
+                    </button>
                 </div>
             </div>
 
@@ -192,6 +203,23 @@
                         </div>
                         <div class="message-time">Sistema iniciado</div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Area -->
+        <section class="results-area" id="resultsArea">
+            <div class="results-header">
+                <h3>ANALYSIS RESULTS</h3>
+                <button class="clear-btn" onclick="clearResults()">
+                    <i class="fas fa-trash"></i>
+                    CLEAR
+                </button>
+            </div>
+            <div id="resultsContent">
+                <div class="no-results">
+                    <i class="fas fa-search"></i>
+                    <p>No analysis performed yet. Execute a query to see results.</p>
                 </div>
             </div>
         </section>
@@ -408,52 +436,44 @@
             fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({ query: message })
             })
             .then(response => response.json())
             .then(data => {
                 showLoading(false);
                 showTypingIndicator(false);
                 
-                if (data.success) {
+                console.log('✅ Chat response received:', data);
+                
+                if (data.answer) {
                     queryCount++;
                     document.getElementById('queryCount').textContent = queryCount;
                     
-                    const result = data.result;
-                    const hasContext = data.has_conversation_context;
-                    const caseContext = data.case_context;
+                    // Usar estructura de datos correcta del backend
+                    let response = data.answer;
                     
-                    // Agregar respuesta del asistente
-                    let response = result.answer;
-                    
-                    // Agregar información de contexto si es relevante
-                    if (hasContext) {
-                        response += '\n\n💭 *Respuesta basada en contexto de conversación*';
+                    // Agregar información de memoria conversacional
+                    if (data.conversation_length > 1) {
+                        response += `\n\n💭 *Respuesta con memoria conversacional (${data.conversation_length} mensajes)*`;
                     }
                     
-                    if (caseContext) {
-                        response += `\n\n📁 *${caseContext}*`;
+                    if (data.session_id && data.session_id !== 'default') {
+                        response += `\n\n📁 *Sesión: ${data.session_id}*`;
                     }
                     
                     addMessageToChat('assistant', response, {
-                        processing_time: result.processing_time,
-                        sources: result.source_documents ? result.source_documents.length : 0
+                        processing_time: data.processing_time,
+                        sources: data.source_documents ? data.source_documents.length : 0,
+                        session_id: data.session_id,
+                        conversation_length: data.conversation_length
                     });
                     
-                    // ✅ NUEVO: Mostrar sugerencias proactivas
-                    if (data.suggestions && data.suggestions.length > 0) {
-                        setTimeout(() => {
-                            showSuggestions(data.suggestions);
-                        }, 500); // Pequeño delay para mejor UX
-                    }
-                    
-                    // Actualizar conversación local
-                    conversation = data.conversation || [];
-                    
-                    addLogEntry(`Chat response: ${result.processing_time.toFixed(2)}s, ${result.source_documents ? result.source_documents.length : 0} sources`);
+                    addLogEntry(`Chat response: ${data.processing_time ? data.processing_time.toFixed(2) : '0.00'}s, ${data.source_documents ? data.source_documents.length : 0} sources`);
                 } else {
-                    addMessageToChat('system', `❌ Error: ${data.error}`);
-                    addLogEntry(`Chat error: ${data.error}`);
+                    // Manejo de errores mejorado
+                    const errorMsg = data.error || 'No response received from system';
+                    addMessageToChat('system', `❌ Error: ${errorMsg}`);
+                    addLogEntry(`Chat error: ${errorMsg}`);
                 }
             })
             .catch(error => {
@@ -1180,7 +1200,7 @@
                     
                     // También mostrar en interfaz tradicional si no estamos en modo chat
                     if (currentMode === 'metadata') {
-                        showMetadataResult(metadata, data.filename);
+                        showMetadataResult(metadata, file.name);
                     }
                 } else {
                     addLogEntry(`Metadata extraction error: ${data.error}`);
@@ -1478,6 +1498,29 @@
 
         // Inicializar en modo chat por defecto
         initializeSystem();
+
+                 function testRAGSystem() {
+              const testQuestion = "Test RAG - dame todos los alias que hemos probado";
+              console.log('🧪 Test RAG iniciado:', testQuestion);
+              
+              // Usar sendChatMessage directamente
+              sendChatMessage(testQuestion);
+              
+              console.log('✅ Test RAG enviado');
+         }
+
+                 function ultraSimpleTest() {
+             console.log('🚀 Ultra Simple Test iniciado...');
+             const testMessage = "Ultra test - funciona el sistema RAG?";
+             
+             // Usar sendChatMessage directamente
+             sendChatMessage(testMessage);
+             
+             // También mostrar en alert después de un delay
+             setTimeout(() => {
+                 alert('Ultra Simple Test enviado. Revisa el chat para ver la respuesta.');
+             }, 500);
+         }
     </script>
 </body>
 </html> 

@@ -5,9 +5,18 @@ let systemOnline = true;
 
 // Inicialización del sistema cuando se carga la página
 document.addEventListener('DOMContentLoaded', function() {
-    initializeSystem();
     setupEventListeners();
     startSystemMonitoring();
+    
+    // Agregar prueba del sistema RAG
+    setTimeout(testRAGSystem, 2000);
+    
+    // Verificación automática del sistema
+    setTimeout(() => {
+        if (typeof verifySystem === 'function') {
+            verifySystem();
+        }
+    }, 3000);
 });
 
 // Inicialización del sistema
@@ -117,20 +126,30 @@ function updateUptime() {
     document.getElementById('uptime').textContent = uptimeString;
 }
 
-// Ejecutar comando
-async function executeCommand() {
+// FUNCIÓN COMENTADA - Se usa la del HTML
+/* 
+async function executeCommand_OLD() {
+    console.log('🔍 EXECUTE COMMAND CALLED!');
+    
     const commandInput = document.getElementById('commandInput');
     const command = commandInput.value.trim();
     
+    console.log('🔍 Command input found:', !!commandInput);
+    console.log('🔍 Command value:', command);
+    
     if (!command) {
+        console.log('🔍 No command provided');
         showNotification('Please enter a command', 'warning');
         return;
     }
     
     if (!systemOnline) {
+        console.log('🔍 System offline');
         showNotification('System offline - Cannot execute command', 'error');
         return;
     }
+    
+    console.log('🔍 Starting command execution...');
     
     // Mostrar loading
     showLoading(true);
@@ -143,40 +162,88 @@ async function executeCommand() {
     document.getElementById('queryCount').textContent = queryCount;
     
     try {
-        // Simular procesamiento
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('🔍 SENDING REQUEST...');
+        console.log('🔍 Command:', command);
         
-        // Enviar comando al backend
-        const response = await fetch('/api/analyze', {
+        // Enviar comando al sistema RAG conversacional
+        const response = await fetch('/chat', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                command: command,
-                timestamp: new Date().toISOString()
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: command })
         });
         
+        console.log('🔍 RESPONSE RECEIVED');
+        console.log('🔍 Status:', response.status);
+        console.log('🔍 OK:', response.ok);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('🔍 DATA PARSED');
+        console.log('🔍 Data:', data);
+        
+        // Verificar si hay error en los datos
+        if (data.error) {
+            throw new Error(data.error);
+        }
         
         // Mostrar resultados
-        displayResults(command, data);
+        // displayConversationalResults(command, data); // DESHABILITADO TEMPORALMENTE
+        
+        // USAR MÉTODO ULTRA-SIMPLE TEMPORALMENTE
+        console.log('🔍 Using ultra-simple display method...');
+        const answer = data.answer || data.response || 'No answer found';
+        
+        // Mostrar en alert
+        alert(`✅ RESPUESTA DEL SISTEMA RAG:\n\n${answer}\n\nSesión: ${data.session_id}\nMemoria: ${data.conversation_length} mensajes`);
+        
+        // También agregar al chat container
+        const chatContainer = document.getElementById('chatContainer');
+        if (chatContainer) {
+            const successDiv = document.createElement('div');
+            successDiv.style.cssText = 'background: rgba(0, 255, 0, 0.2); border: 1px solid green; color: white; padding: 15px; margin: 10px; border-radius: 8px; font-family: monospace;';
+            successDiv.innerHTML = `
+                <strong>✅ RAG RESPONSE RECEIVED:</strong><br>
+                <strong>Query:</strong> ${command}<br>
+                <strong>Answer:</strong> ${answer}<br>
+                <strong>Session:</strong> ${data.session_id}<br>
+                <strong>Memory:</strong> ${data.conversation_length} messages<br>
+                <strong>Processing Time:</strong> ${data.processing_time}s<br>
+                <strong>Timestamp:</strong> ${new Date().toLocaleString()}
+            `;
+            chatContainer.appendChild(successDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
         
         // Limpiar input
         commandInput.value = '';
         
         // Agregar al log
-        addLogEntry(`Command executed successfully`);
+        addLogEntry(`RAG query executed successfully`);
         
     } catch (error) {
-        console.error('Error executing command:', error);
+        console.error('❌ Error executing command:', error);
+        
+        // Mostrar error en la interfaz
+        const resultsContent = document.getElementById('resultsContent');
+        resultsContent.innerHTML = `
+            <div style="border: 1px solid #ff4444; padding: 15px; margin: 10px 0; background: rgba(34, 0, 17, 0.9);">
+                <h4 style="color: #ff4444;">❌ ERROR</h4>
+                <div style="color: white; margin: 10px 0;">
+                    ${error.message}
+                </div>
+            </div>
+        `;
+        
         showNotification('Error executing command', 'error');
         addLogEntry(`Error: ${error.message}`);
     } finally {
         showLoading(false);
     }
 }
+*/
 
 // Mostrar/ocultar loading
 function showLoading(show) {
@@ -264,16 +331,94 @@ function displayResults(command, data) {
     resultsContent.innerHTML = resultHtml;
 }
 
+// Mostrar resultados conversacionales del sistema RAG (VERSIÓN SIMPLE)
+function displayConversationalResults(command, data) {
+    console.log('🎨 displayConversationalResults called with:', { command, data });
+    
+    const resultsContent = document.getElementById('resultsContent');
+    
+    // Validar que data existe
+    if (!data) {
+        console.error('❌ No data provided to displayConversationalResults');
+        if (resultsContent) {
+            resultsContent.innerHTML = `<div class="error">❌ No data received</div>`;
+        }
+        return;
+    }
+    
+    // CRÍTICO: Verificar que el elemento existe
+    if (!resultsContent) {
+        console.error('❌ CRITICAL ERROR: resultsContent element not found!');
+        console.error('❌ Running system verification...');
+        
+        // Ejecutar verificación del sistema
+        if (typeof verifySystem === 'function') {
+            verifySystem();
+        }
+        
+        // Mostrar error en el chat en su lugar
+        const chatContainer = document.getElementById('chatContainer');
+        if (chatContainer) {
+            const errorMessage = `
+                <div style="color: red; padding: 15px; margin: 10px; border: 1px solid red;">
+                    ❌ CRITICAL ERROR: Display element missing.<br>
+                    Check console for system verification results.
+                </div>
+            `;
+            chatContainer.innerHTML += errorMessage;
+        }
+        return;
+    }
+    
+    // Obtener respuesta - probar múltiples campos
+    let answer = 'No response found';
+    if (data.answer) {
+        answer = data.answer;
+    } else if (data.response) {
+        answer = data.response;
+    } else if (data.result) {
+        answer = data.result;
+    }
+    
+    console.log('🎨 Final answer:', answer);
+    console.log('🎨 Answer type:', typeof answer);
+    
+    // Crear HTML SIMPLE
+    const simpleHtml = `
+        <div style="border: 1px solid #00d4ff; padding: 15px; margin: 10px 0; background: rgba(0, 17, 34, 0.9);">
+            <h4 style="color: #00d4ff;">🔍 QUERY: ${command}</h4>
+            <div style="margin: 10px 0; padding: 10px; background: rgba(0, 212, 255, 0.1); border-left: 4px solid #00d4ff;">
+                <strong style="color: #00d4ff;">🤖 Response:</strong><br>
+                <span style="color: white;">${answer}</span>
+            </div>
+            <div style="color: #888; font-size: 0.9em;">
+                Session: ${data.session_id || 'default'} | 
+                Memory: ${data.conversation_length || 0} msgs | 
+                Time: ${data.processing_time ? data.processing_time.toFixed(2) + 's' : 'N/A'}
+            </div>
+        </div>
+    `;
+    
+    console.log('🎨 Generated simple HTML (first 200 chars):', simpleHtml.substring(0, 200));
+    resultsContent.innerHTML = simpleHtml;
+    
+    console.log('✅ Results displayed successfully');
+}
+
 // Limpiar resultados
 function clearResults() {
     const resultsContent = document.getElementById('resultsContent');
-    resultsContent.innerHTML = `
-        <div class="no-results">
-            <i class="fas fa-search"></i>
-            <p>No analysis performed yet. Execute a query to see results.</p>
-        </div>
-    `;
-    addLogEntry('Results cleared');
+    if (resultsContent) {
+        resultsContent.innerHTML = `
+            <div class="no-results">
+                <i class="fas fa-search"></i>
+                <p>No analysis performed yet. Execute a query to see results.</p>
+            </div>
+        `;
+        console.log('✅ Results cleared');
+    } else {
+        console.error('❌ resultsContent element not found');
+    }
 }
 
 // Agregar entrada al log
@@ -474,4 +619,165 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// Función de prueba para diagnosticar el problema
+function testRAGSystem() {
+    console.log('🧪 Testing RAG System...');
+    simpleTest(); // Usar la función simple
+}
+
+// Función de prueba ULTRA simple para diagnosticar
+function simpleTest() {
+    console.log('🔥 SIMPLE TEST STARTING...');
+    
+    const testData = {
+        query: "Test simple"
+    };
+    
+    console.log('🔥 Sending:', JSON.stringify(testData));
+    
+    fetch('/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => {
+        console.log('🔥 Response received:', response);
+        console.log('🔥 Response status:', response.status);
+        console.log('🔥 Response ok:', response.ok);
+        
+        return response.text(); // Usar text() en lugar de json() para ver raw
+    })
+    .then(rawText => {
+        console.log('🔥 Raw response text:', rawText);
+        
+        try {
+            const data = JSON.parse(rawText);
+            console.log('🔥 Parsed JSON:', data);
+            console.log('🔥 Answer field:', data.answer);
+            console.log('🔥 Answer type:', typeof data.answer);
+            
+            if (data.answer) {
+                alert('✅ SUCCESS: ' + data.answer);
+            } else {
+                alert('❌ PROBLEM: No answer field found');
+            }
+        } catch (e) {
+            console.error('🔥 JSON parse error:', e);
+            alert('❌ PROBLEM: Invalid JSON response');
+        }
+    })
+    .catch(error => {
+        console.error('🔥 Fetch error:', error);
+        alert('❌ PROBLEM: Network error');
+    });
+}
+
+// Agregar botón de prueba simple
+document.addEventListener('DOMContentLoaded', function() {
+    // Crear botón de prueba en la interfaz
+    const testButton = document.createElement('button');
+    testButton.textContent = '🔥 SIMPLE TEST';
+    testButton.style.position = 'fixed';
+    testButton.style.top = '10px';
+    testButton.style.right = '10px';
+    testButton.style.zIndex = '9999';
+    testButton.style.padding = '10px';
+    testButton.style.backgroundColor = '#ff4444';
+    testButton.style.color = 'white';
+    testButton.style.border = 'none';
+    testButton.style.cursor = 'pointer';
+    testButton.onclick = simpleTest;
+    
+    document.body.appendChild(testButton);
+});
+
+// Test ULTRA SIMPLE que muestra resultado en alert
+function ultraSimpleTest() {
+    console.log('🚀 ULTRA SIMPLE TEST STARTING...');
+    
+    fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'Test simple' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('🚀 Raw data received:', data);
+        
+        const answer = data.answer || data.response || 'No answer found';
+        console.log('🚀 Answer extracted:', answer);
+        
+        // Mostrar en alert para ver si funciona
+        alert(`RESPUESTA RECIBIDA:\n\n${answer}`);
+        
+        // También mostrar en el chat container existente
+        const chatContainer = document.getElementById('chatContainer');
+        if (chatContainer) {
+            chatContainer.innerHTML += `
+                <div style="background: green; color: white; padding: 15px; margin: 10px; border-radius: 8px;">
+                    <strong>✅ ÉXITO:</strong><br>
+                    ${answer}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('🚀 Error:', error);
+        alert(`ERROR: ${error.message}`);
+    });
+}
+
+// Hacer función accesible globalmente
+window.ultraSimpleTest = ultraSimpleTest;
+
+// Función de verificación completa del sistema
+function verifySystem() {
+    console.log('🔧 SYSTEM VERIFICATION STARTING...');
+    
+    // Verificar elemento resultsContent
+    const resultsContent = document.getElementById('resultsContent');
+    console.log('🔧 resultsContent element:', resultsContent);
+    console.log('🔧 resultsContent exists:', !!resultsContent);
+    
+    if (!resultsContent) {
+        console.error('❌ CRITICAL: resultsContent element missing!');
+        return false;
+    }
+    
+    // Verificar elemento commandInput
+    const commandInput = document.getElementById('commandInput');
+    console.log('🔧 commandInput exists:', !!commandInput);
+    
+    // Verificar función displayConversationalResults
+    console.log('🔧 displayConversationalResults exists:', typeof displayConversationalResults);
+    
+    // Realizar prueba simple
+    console.log('🔧 Testing resultsContent update...');
+    resultsContent.innerHTML = `
+        <div style="color: green; padding: 20px;">
+            ✅ VERIFICATION SUCCESSFUL! 
+            <br>Element found and working correctly.
+            <br>Time: ${new Date().toLocaleTimeString()}
+        </div>
+    `;
+    
+    console.log('✅ SYSTEM VERIFICATION COMPLETE');
+    return true;
+}
+
 console.log('🎯 Tony Stark Interface JavaScript loaded successfully'); 
+
+// Función simple para test desde consola
+window.testRAGFromConsole = function() {
+    console.log('🧪 Testing RAG system from console...');
+    
+    // Usar la función sendChatMessage del HTML
+    if (typeof sendChatMessage === 'function') {
+        sendChatMessage('Test desde consola - dame los alias que hemos probado');
+        console.log('✅ Test enviado usando sendChatMessage()');
+    } else {
+        console.error('❌ sendChatMessage function not found');
+    }
+}; 

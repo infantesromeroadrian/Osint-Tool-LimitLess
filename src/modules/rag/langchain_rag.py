@@ -1,6 +1,7 @@
 """
 LangChain RAG System - Implementación moderna con LangChain 0.2.x
 Siguiendo documentación oficial actualizada y mejores prácticas
+INCLUYE MEMORIA CONVERSACIONAL COMPLETA
 """
 
 import os
@@ -20,8 +21,14 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
+
+# Memoria conversacional
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
 
 # Configuración
 from src.config.settings import settings
@@ -35,10 +42,11 @@ class LangChainRAG:
     - Usa create_retrieval_chain y create_stuff_documents_chain
     - Maneja errores con sistema fallback
     - Implementa lazy loading para mejor rendimiento
+    - INCLUYE MEMORIA CONVERSACIONAL COMPLETA POR SESIÓN
     """
     
     def __init__(self):
-        """Inicializar sistema RAG con LangChain 0.2.x API moderna"""
+        """Inicializar sistema RAG con LangChain 0.2.x API moderna y memoria conversacional"""
         try:
             # Validar API key
             if not settings.OPENAI_API_KEY:
@@ -65,11 +73,14 @@ class LangChainRAG:
             self.vector_store = None
             self._init_vector_store()
             
-            # Crear RAG chain
-            self.qa_chain = None
-            self._create_qa_chain()
+            # Inicializar memoria conversacional
+            self.message_histories: Dict[str, BaseChatMessageHistory] = {}
             
-            logger.info("✅ LangChain RAG 0.2.x inicializado correctamente con API moderna")
+            # Crear RAG chain con memoria conversacional
+            self.qa_chain = None
+            self._create_conversational_qa_chain()
+            
+            logger.info("✅ LangChain RAG 0.2.x inicializado correctamente con API moderna y memoria conversacional")
             
         except Exception as e:
             logger.error(f"❌ Error inicializando LangChain RAG: {e}")
@@ -98,8 +109,15 @@ class LangChainRAG:
             self.vector_store = None
             raise
 
-    def _create_qa_chain(self):
-        """Crear cadena de Q&A con retrieval usando la API moderna"""
+    def _get_session_history(self, session_id: str) -> BaseChatMessageHistory:
+        """Obtener o crear historial de mensajes para una sesión"""
+        if session_id not in self.message_histories:
+            self.message_histories[session_id] = ChatMessageHistory()
+            logger.info(f"🆕 Nueva sesión de memoria creada: {session_id}")
+        return self.message_histories[session_id]
+
+    def _create_conversational_qa_chain(self):
+        """Crear cadena de Q&A conversacional con retrieval usando la API moderna"""
         try:
             if self.vector_store is None:
                 raise ValueError("Vector store no inicializado")
@@ -111,23 +129,24 @@ class LangChainRAG:
                 }
             )
             
-            # Crear prompt para RAG
+            # Crear prompt conversacional para RAG
             system_prompt = (
-                "You are an assistant for question-answering tasks. "
-                "Use the following pieces of retrieved context to answer "
-                "the question. If you don't know the answer, say that you "
-                "don't know. Use three sentences maximum and keep the "
-                "answer concise."
-                "\n\n"
-                "{context}"
+                "Eres un asistente especializado en análisis OSINT e inteligencia. "
+                "Usa la siguiente información recuperada del contexto para responder "
+                "la pregunta del usuario. Si no conoces la respuesta basándote en el "
+                "contexto proporcionado, di claramente que no lo sabes. "
+                "Mantén las respuestas concisas y precisas.\n"
+                "Si te han dado información sobre intentos previos fallidos (como aliases probados), "
+                "toma esa información en cuenta para no repetir sugerencias.\n\n"
+                "Contexto recuperado:\n{context}"
             )
             
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", system_prompt),
-                    ("human", "{input}"),
-                ]
-            )
+            # Prompt con memoria conversacional
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ])
             
             # Crear chain de documentos
             question_answer_chain = create_stuff_documents_chain(
@@ -137,15 +156,24 @@ class LangChainRAG:
             )
             
             # Crear chain de retrieval completa
-            self.qa_chain = create_retrieval_chain(
+            rag_chain = create_retrieval_chain(
                 retriever, 
                 question_answer_chain
             )
             
-            logger.info("🔗 QA Chain creada correctamente con API moderna")
+            # Envolver con memoria conversacional
+            self.qa_chain = RunnableWithMessageHistory(
+                rag_chain,
+                self._get_session_history,
+                input_messages_key="input",
+                history_messages_key="chat_history",
+                output_messages_key="answer"
+            )
+            
+            logger.info("🔗 QA Chain conversacional creada correctamente con API moderna")
             
         except Exception as e:
-            logger.error(f"❌ Error creando QA chain: {e}")
+            logger.error(f"❌ Error creando QA chain conversacional: {e}")
             raise
 
     def add_documents(self, texts: List[str], metadatas: Optional[List[Dict]] = None) -> bool:
@@ -179,18 +207,21 @@ class LangChainRAG:
             logger.error(f"❌ Error agregando documentos: {e}")
             return False
 
-    def query(self, question: str) -> Dict[str, Any]:
-        """Ejecutar consulta RAG usando la API moderna"""
+    def query(self, question: str, session_id: str = "default") -> Dict[str, Any]:
+        """Ejecutar consulta RAG conversacional usando la API moderna"""
         start_time = datetime.now()
         
         try:
             if not self.qa_chain:
                 raise ValueError("QA Chain no inicializada")
             
-            logger.info(f"🔍 Ejecutando consulta: {question}")
+            logger.info(f"🔍 Ejecutando consulta conversacional: {question} [sesión: {session_id}]")
             
-            # Ejecutar consulta (API moderna)
-            result = self.qa_chain.invoke({"input": question})
+            # Ejecutar consulta con memoria conversacional
+            result = self.qa_chain.invoke(
+                {"input": question},
+                config={"configurable": {"session_id": session_id}}
+            )
             
             # Extraer información con nueva estructura
             answer = result.get("answer", "No se pudo generar respuesta")
@@ -198,6 +229,10 @@ class LangChainRAG:
             
             # Calcular tiempo
             processing_time = (datetime.now() - start_time).total_seconds()
+            
+            # Obtener historial de la sesión para estadísticas
+            session_history = self._get_session_history(session_id)
+            history_length = len(session_history.messages) if hasattr(session_history, 'messages') else 0
             
             # Preparar respuesta
             response = {
@@ -211,16 +246,18 @@ class LangChainRAG:
                     for doc in source_docs
                 ],
                 "processing_time": processing_time,
+                "session_id": session_id,
+                "conversation_length": history_length,
                 "timestamp": datetime.now().isoformat()
             }
             
-            logger.info(f"✅ Consulta completada en {processing_time:.2f}s")
-            logger.info(f"📊 Documentos fuente: {len(source_docs)}")
+            logger.info(f"✅ Consulta conversacional completada en {processing_time:.2f}s")
+            logger.info(f"📊 Documentos fuente: {len(source_docs)} | Historial: {history_length} mensajes")
             
             return response
             
         except Exception as e:
-            logger.error(f"❌ Error en consulta RAG: {e}")
+            logger.error(f"❌ Error en consulta RAG conversacional: {e}")
             processing_time = (datetime.now() - start_time).total_seconds()
             
             return {
@@ -228,14 +265,46 @@ class LangChainRAG:
                 "answer": f"Error: {str(e)}",
                 "source_documents": [],
                 "processing_time": processing_time,
+                "session_id": session_id,
+                "conversation_length": 0,
                 "error": True
             }
+
+    def clear_session_history(self, session_id: str) -> bool:
+        """Limpiar historial de una sesión específica"""
+        try:
+            if session_id in self.message_histories:
+                self.message_histories[session_id].clear()
+                logger.info(f"🧹 Historial limpiado para sesión: {session_id}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error limpiando historial de sesión {session_id}: {e}")
+            return False
+
+    def get_session_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """Obtener historial de mensajes de una sesión"""
+        try:
+            if session_id in self.message_histories:
+                messages = self.message_histories[session_id].messages
+                return [
+                    {
+                        "type": "human" if isinstance(msg, HumanMessage) else "ai",
+                        "content": msg.content,
+                        "timestamp": getattr(msg, 'timestamp', None)
+                    }
+                    for msg in messages
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo historial de sesión {session_id}: {e}")
+            return []
 
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas del sistema"""
         try:
             # Información básica del sistema
-            return {
+            stats = {
                 "vector_store_status": "inicializado" if self.vector_store else "no inicializado",
                 "qa_chain_status": "inicializado" if self.qa_chain else "no inicializado",
                 "chunk_size": settings.CHUNK_SIZE,
@@ -244,8 +313,26 @@ class LangChainRAG:
                 "similarity_threshold": settings.SIMILARITY_THRESHOLD,
                 "chroma_path": settings.CHROMA_DB_PATH,
                 "langchain_version": "0.2.x (API moderna)",
-                "chain_type": "create_retrieval_chain"
+                "chain_type": "create_retrieval_chain",
+                "memory_enabled": True,
+                "active_sessions": len(self.message_histories),
+                "session_ids": list(self.message_histories.keys())
             }
+            
+            # Estadísticas de memoria por sesión
+            session_stats = {}
+            for session_id, history in self.message_histories.items():
+                try:
+                    session_stats[session_id] = {
+                        "message_count": len(history.messages) if hasattr(history, 'messages') else 0,
+                        "last_activity": datetime.now().isoformat()  # Placeholder
+                    }
+                except:
+                    session_stats[session_id] = {"message_count": 0, "last_activity": None}
+            
+            stats["session_statistics"] = session_stats
+            
+            return stats
             
         except Exception as e:
             logger.error(f"❌ Error obteniendo estadísticas: {e}")
@@ -269,13 +356,15 @@ def get_rag_system():
 class DummyRAG:
     """Sistema RAG dummy para cuando hay problemas de inicialización"""
     
-    def query(self, question: str) -> Dict[str, Any]:
+    def query(self, question: str, session_id: str = "default") -> Dict[str, Any]:
         """Respuesta dummy"""
         return {
             "question": question,
             "answer": "Sistema RAG no disponible. Verifica la configuración de OpenAI API Key.",
             "source_documents": [],
             "processing_time": 0.0,
+            "session_id": session_id,
+            "conversation_length": 0,
             "error": True
         }
     
@@ -284,10 +373,20 @@ class DummyRAG:
         logger.warning("⚠️ Sistema RAG no disponible - documentos no agregados")
         return False
     
+    def clear_session_history(self, session_id: str) -> bool:
+        """Método dummy para limpiar historial"""
+        return False
+        
+    def get_session_history(self, session_id: str) -> List[Dict[str, Any]]:
+        """Método dummy para obtener historial"""
+        return []
+    
     def get_stats(self) -> Dict[str, Any]:
         """Estadísticas dummy"""
         return {
             "vector_store_status": "no disponible",
             "qa_chain_status": "no disponible",
+            "memory_enabled": False,
+            "active_sessions": 0,
             "error": "Sistema RAG no inicializado"
         } 
